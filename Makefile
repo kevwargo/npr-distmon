@@ -7,13 +7,16 @@ SOURCES=src/distmon.c
 SOURCES+=src/node.c
 SOURCES+=src/socket.c
 
+HEADERS=include/node.h
+HEADERS+=include/socket.h
+
 
 define SourcesToObjects =
 $(addprefix obj/, $(addsuffix .o, $(notdir $(basename $(1)))))
 endef
 
 define DefineRule =
-$(call SourcesToObjects, $(1)): $(1) Makefile
+$(call SourcesToObjects, $(1)): $(1) Makefile $(HEADERS)
 	$$(CC) $$(CFLAGS) $$< -o $$@
 endef
 

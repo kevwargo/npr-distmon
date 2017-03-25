@@ -7,45 +7,60 @@
 
 #define ALLOC_STEP 2
 
-
-void add_node(struct node_list **list_ptr, int sfd, struct sockaddr_in *saddr)
+struct node_list *create_node_list()
 {
-    if (! list_ptr) {
-        return;
-    }
-    struct node_list *list = *list_ptr;
+    struct node_list *list = malloc(sizeof(struct node_list));
     if (! list) {
-        *list_ptr = malloc(sizeof(struct node_list) + sizeof(struct node) * ALLOC_STEP);
-        if (! *list_ptr) {
-            perror("malloc");
-            exit(1);
-        }
-        list = *list_ptr;
-        list->len = 0;
-        list->allocated = ALLOC_STEP;
-        printf("allocated %d\n", list->allocated);
+        perror("create_node_list malloc");
+        exit(1);
     }
+    memset(list, 0, sizeof(struct node_list));
+    return list;
+}
+
+void add_node(struct node_list *list, int id, int sfd, struct sockaddr_in *saddr)
+{
     if (list->allocated <= list->len) {
-        list->allocated += ALLOC_STEP;
-        *list_ptr = realloc(list, sizeof(struct node_list) + sizeof(struct node) * list->allocated);
-        if (! *list_ptr) {
+        while (list->allocated <= list->len) {
+            list->allocated += ALLOC_STEP;
+        }
+        list->array = realloc(list->array, sizeof(struct node) * list->allocated);
+        if (! list->array) {
             perror("realloc");
             exit(1);
         }
-        list = *list_ptr;
-        printf("reallocated %d\n", list->allocated);
     }
-    list->array[list->len].id = 0;
+    list->array[list->len].id = id;
     list->array[list->len].sfd = sfd;
     memcpy(&list->array[list->len].saddr, saddr, sizeof(struct sockaddr_in));
     list->len++;
-    printf("new len %d\n", list->len);
 }
 
 void print_nodes(struct node_list *list)
 {
+    fprint_nodes(stdout, list);
+}
+
+void fprint_nodes(FILE *f, struct node_list *list)
+{
     for (int i = 0; i < list->len; i++) {
-        printf("%d %s:%d\n", list->array[i].sfd, inet_ntoa(list->array[i].saddr.sin_addr), ntohs(list->array[i].saddr.sin_port));
+        fprintf(f, "%d %s:%d\n", list->array[i].id, inet_ntoa(list->array[i].saddr.sin_addr), ntohs(list->array[i].saddr.sin_port));
     }
-    printf("\n");
+    fprintf(f, "\n");
+}
+
+void expand_node_list(struct node_list *list, int newlen)
+{
+    if (list->allocated < newlen) {
+        list->allocated = newlen;
+    }
+    list->array = realloc(list->array, sizeof(struct node) * list->allocated);
+}
+
+void free_node_list(struct node_list *list)
+{
+    if (list->array) {
+        free(list->array);
+    }
+    free(list);
 }
