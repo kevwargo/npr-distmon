@@ -7,10 +7,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 #include <errno.h>
 #include "node.h"
 #include "socket.h"
 
+struct node_list global_node_list = {0, 0, NULL};
+int global_id = 1;
 
 int parse_cmdline(int argc, char **argv, struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr)
 {
@@ -62,14 +65,14 @@ int propagate(struct sockaddr_in *conn_addr, struct node_list *node_list)
     }
 
     for (int i = 0; i < list->len; i++) {
-        int _found = 0;
+        found = 0;
         for (int j = 0; j < node_list->len; j++) {
             if (list->array[i].id == node_list->array[j].id) {
-                _found = 1;
+                found = 1;
                 break;
             }
         }
-        if (! _found) {
+        if (! found) {
             int temp_id = propagate(&list->array[i].saddr, node_list);
             if (temp_id > id) {
                 id = temp_id;
@@ -131,24 +134,57 @@ void accept_loop(int id, int bindsock, struct node_list *node_list)
     }
 }
 
+void log_nodes(int signum)
+{
+    char logname[127];
+    snprintf(logname, 127, "nodes-%03d.log", global_id);
+    FILE *logfile = fopen(logname, "w+");
+    if (! logfile) {
+        perror("log_nodes: fopen logfile");
+        return;
+    }
+    if (fprintf(logfile, "Nodes connected to %d:\n", global_id) < 0) {
+        perror("log_nodes: fprintf logfile header");
+        fclose(logfile);
+        return;
+    }
+    for (int i = 0; i < global_node_list.len; i++) {
+        struct node *node = &global_node_list.array[i];
+        if (fprintf(logfile, "%d %s:%d\n", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port)) < 0) {
+            perror("log_nodes: fprintf logfile");
+            fclose(logfile);
+            return;
+        }
+    }
+    fclose(logfile);
+}
+
 int main(int argc, char **argv)
 {
     int bindsock;
     struct sockaddr_in bind_addr;
     struct sockaddr_in conn_addr;
-    struct node_list *node_list = create_node_list();
-    int id = 0;
+    /* struct node_list *node_list = create_node_list(); */
+    /* int id = 1; */
 
     int is_connect = parse_cmdline(argc, argv, &bind_addr, &conn_addr);
     bindsock = socket_initbind(&bind_addr);
 
     if (is_connect) {
-        id = init_distenv(&bind_addr, &conn_addr, node_list);
-        printf("self.id = %d\n", id);
-        print_nodes(node_list);
+        global_id = init_distenv(&bind_addr, &conn_addr, &global_node_list);
+        printf("self.id = %d\n", global_id);
+        print_nodes(&global_node_list);
     }
 
-    accept_loop(id, bindsock, node_list);
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(struct sigaction));
+    sa.sa_handler = log_nodes;
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGUSR1, &sa, NULL) < 0) {
+        perror("sigaction");
+    }
+
+    accept_loop(global_id, bindsock, &global_node_list);
 
     return 0;
 }
