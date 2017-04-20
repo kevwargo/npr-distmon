@@ -24,7 +24,10 @@ endef
 .PHONY: clean
 .PHONY: all
 
-all: distmon
+all: obj distmon
+
+obj:
+	mkdir -p obj
 
 $(foreach src, $(SOURCES), $(eval $(call DefineRule, $(src))))
 
@@ -32,4 +35,4 @@ distmon: $(call SourcesToObjects, $(SOURCES))
 	$(LD) $(LDFLAGS) -o $@ $^
 
 clean:
-	rm -f obj/* distmon
+	rm -rf obj distmon
