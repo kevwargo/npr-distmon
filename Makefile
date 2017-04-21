@@ -6,6 +6,7 @@ LDFLAGS=
 SOURCES=src/distmon.c
 SOURCES+=src/node.c
 SOURCES+=src/socket.c
+SOURCES+=src/events.c
 
 HEADERS=include/node.h
 HEADERS+=include/socket.h

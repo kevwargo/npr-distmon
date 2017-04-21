@@ -11,6 +11,7 @@
 #include <errno.h>
 #include "node.h"
 #include "socket.h"
+#include "events.h"
 
 struct node *global_node_list = NULL;
 int global_id = 1;
@@ -94,51 +95,6 @@ int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, s
     return self.id;
 }
 
-void accept_loop(int id, int bindsock, struct node **node_list)
-{
-    while (1) {
-        struct sockaddr_in c_addr;
-        socklen_t c_addr_len = sizeof(struct sockaddr_in);
-        int cfd = accept(bindsock, (struct sockaddr *)&c_addr, &c_addr_len);
-        if (cfd < 0) {
-            perror("accept");
-            exit(1);
-        }
-
-        if (send(cfd, &id, sizeof(int), 0) < 0) {
-            perror("send self node id");
-            exit(1);
-        }
-        int bufsize = 0;
-        uint8_t *buffer = pack_nodes(*node_list, &bufsize);
-        if (send(cfd, &bufsize, sizeof(int), 0) < 0) {
-            perror("send node list len");
-            exit(1);
-        }
-        if (bufsize > 0) {
-            if (send(cfd, buffer, bufsize, 0) < 0) {
-                perror("send node list");
-                exit(1);
-            }
-        }
-
-        struct packed_node n;
-        if (recv(cfd, &n, PACKED_NODE_SIZE, MSG_WAITALL) < 0) {
-            perror("recv node info");
-            exit(1);
-        }
-        struct node node;
-        node.id = n.id;
-        node.sfd = cfd;
-        node.saddr.sin_family = AF_INET;
-        node.saddr.sin_addr.s_addr = n.ip;
-        node.saddr.sin_port = n.port;
-        add_node(node_list, &node);
-        printf("New node list after accepting a node:\n");
-        print_nodes(*node_list);
-    }
-}
-
 void log_nodes(int signum)
 {
     char logname[127];
@@ -187,7 +143,7 @@ int main(int argc, char **argv)
         perror("sigaction");
     }
 
-    accept_loop(global_id, bindsock, &global_node_list);
+    event_loop(global_id, bindsock, &global_node_list);
 
     return 0;
 }
