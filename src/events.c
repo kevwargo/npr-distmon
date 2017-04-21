@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -11,7 +12,7 @@
 
 int build_pollfds(int serv_sock, struct node *nodes, struct pollfd **pollfds)
 {
-    int size = nodes_count(nodes) + 1;
+    int size = count_nodes(nodes) + 1;
     *pollfds = calloc(size, sizeof(struct pollfd));
     struct pollfd *pfds = *pollfds;
     pfds[0].fd = serv_sock;
@@ -27,7 +28,7 @@ int build_pollfds(int serv_sock, struct node *nodes, struct pollfd **pollfds)
     return size;
 }
 
-void accept_node(int id, int serv_sock, struct node *node_list)
+void accept_node(int id, int serv_sock, struct node **node_list)
 {
     struct sockaddr_in c_addr;
     socklen_t c_addr_len = sizeof(struct sockaddr_in);
@@ -41,8 +42,8 @@ void accept_node(int id, int serv_sock, struct node *node_list)
         perror("send self node id");
         exit(1);
     }
-    int bufsize = node_list->size;
-    uint8_t *buffer = pack_nodes(node_list);
+    int bufsize = 0;
+    uint8_t *buffer = pack_nodes(*node_list, &bufsize);
     if (send(cfd, &bufsize, sizeof(int), 0) < 0) {
         perror("send node list len");
         exit(1);
@@ -125,16 +126,21 @@ void event_loop(int id, int serv_sock, struct node **node_list)
     while (1) {
         int selected = poll(pfds, nfds, -1);
         if (selected < 0) {
+            if (errno == EINTR) {
+                printf("EINTR caught on poll, restarting...\n");
+                continue;
+            }
             perror("poll");
+            exit(1);
         }
         printf("poll returned %d\n", selected);
-        int i = 1;
         char *str = str_revents(pfds[0].revents);
         if (str) {
             printf("server socket revents: %s\n", str);
             free(str);
         }
-        for (struct node *node = *node_list; node; node = node->next) {
+        int i = 1;
+        for (struct node *node = *node_list; node; node = node->next, i++) {
             str = str_revents(pfds[i].revents);
             if (str) {
                 printf("node %d revents: %s\n", node->id, str);
@@ -142,8 +148,13 @@ void event_loop(int id, int serv_sock, struct node **node_list)
             }
             if (pfds[i].revents & POLLIN) {
                 char c;
-                if (recv(pfds[i].fd, &c, 1, 0) == 0) {
-                    printf("Node %d disconnected\n", node->id);
+                int recved = recv(pfds[i].fd, &c, 1, 0);
+                if (recved <= 0) {
+                    fprintf(stderr, "Node %d disconnected", node->id);
+                    if (recved < 0) {
+                        perror(" with error");
+                    }
+                    putc('\n', stderr);
                     delete_node(node_list, node);
                     free(pfds);
                     nfds = build_pollfds(serv_sock, *node_list, &pfds);
