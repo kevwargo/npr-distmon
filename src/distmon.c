@@ -12,8 +12,9 @@
 #include "node.h"
 #include "socket.h"
 
-struct node_list global_node_list = {0, 0, NULL};
+struct node *global_node_list = NULL;
 int global_id = 1;
+struct sockaddr_in bind_addr;
 
 int parse_cmdline(int argc, char **argv, struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr)
 {
@@ -31,7 +32,7 @@ int parse_cmdline(int argc, char **argv, struct sockaddr_in *bind_addr, struct s
     return 0;
 }
 
-int propagate(struct sockaddr_in *conn_addr, struct node_list *node_list)
+int propagate(struct sockaddr_in *conn_addr, struct node **node_list)
 {
     int connsock = socket_initconn(conn_addr);
     int node_id;
@@ -39,43 +40,38 @@ int propagate(struct sockaddr_in *conn_addr, struct node_list *node_list)
         perror("recv node id");
         exit(1);
     }
-    int found = 0;
-    for (int i = 0; i < node_list->len; i++) {
-        if (node_list->array[i].id == node_id) {
-            found = 1;
-            break;
-        }
-    }
-    if (! found) {
-        add_node(node_list, node_id, connsock, conn_addr);
+    if (! contains(*node_list, node_id)) {
+        struct node node;
+        node.id = node_id;
+        node.sfd = connsock;
+        memcpy(&node.saddr, conn_addr, sizeof(struct sockaddr_in));
+        add_node(node_list, &node);
     }
 
     int id = node_id + 1;
-    struct node_list *list = create_node_list();
-    if (recv(connsock, &list->len, sizeof(int), MSG_WAITALL) < 0) {
+    int bufsize;
+    uint8_t *buffer;
+    if (recv(connsock, &bufsize, sizeof(int), MSG_WAITALL) < 0) {
         perror("recv node list len");
         exit(1);
     }
-    if (list->len > 0) {
-        expand_node_list(list, list->len);
-        if (recv(connsock, list->array, sizeof(struct node) * list->len, MSG_WAITALL) < 0) {
+    if (bufsize > 0) {
+        buffer = (uint8_t *)malloc(bufsize);
+        if (recv(connsock, buffer, bufsize, MSG_WAITALL) < 0) {
             perror("recv node list");
             exit(1);
         }
-    }
-
-    for (int i = 0; i < list->len; i++) {
-        found = 0;
-        for (int j = 0; j < node_list->len; j++) {
-            if (list->array[i].id == node_list->array[j].id) {
-                found = 1;
-                break;
-            }
-        }
-        if (! found) {
-            int temp_id = propagate(&list->array[i].saddr, node_list);
-            if (temp_id > id) {
-                id = temp_id;
+        for (int offset = 0; offset <= bufsize - PACKED_NODE_SIZE; offset += PACKED_NODE_SIZE) {
+            struct packed_node *node = (struct packed_node *)(buffer + offset);
+            if (! contains(*node_list, node->id)) {
+                struct sockaddr_in saddr;
+                saddr.sin_family = AF_INET;
+                saddr.sin_addr.s_addr = node->ip;
+                saddr.sin_port = node->port;
+                int temp_id = propagate(&saddr, node_list);
+                if (temp_id > id) {
+                    id = temp_id;
+                }
             }
         }
     }
@@ -83,13 +79,14 @@ int propagate(struct sockaddr_in *conn_addr, struct node_list *node_list)
     return id;
 }
 
-int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, struct node_list *node_list)
+int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, struct node **node_list)
 {
-    struct node self;
+    struct packed_node self;
     self.id = propagate(conn_addr, node_list);
-    memcpy(&self.saddr, bind_addr, sizeof(struct sockaddr_in));
-    for (int i = 0; i < node_list->len; i++) {
-        if (send(node_list->array[i].sfd, &self, sizeof(struct node), 0) < 0) {
+    self.ip = bind_addr->sin_addr.s_addr;
+    self.port = bind_addr->sin_port;
+    for (struct node *node = *node_list; node; node = node->next) {
+        if (send(node->sfd, &self, PACKED_NODE_SIZE, 0) < 0) {
             perror("send self node info");
             exit(1);
         }
@@ -97,7 +94,7 @@ int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, s
     return self.id;
 }
 
-void accept_loop(int id, int bindsock, struct node_list *node_list)
+void accept_loop(int id, int bindsock, struct node **node_list)
 {
     while (1) {
         struct sockaddr_in c_addr;
@@ -112,25 +109,33 @@ void accept_loop(int id, int bindsock, struct node_list *node_list)
             perror("send self node id");
             exit(1);
         }
-        if (send(cfd, &node_list->len, sizeof(int), 0) < 0) {
+        int bufsize = 0;
+        uint8_t *buffer = pack_nodes(*node_list, &bufsize);
+        if (send(cfd, &bufsize, sizeof(int), 0) < 0) {
             perror("send node list len");
             exit(1);
         }
-        if (node_list->len > 0) {
-            if (send(cfd, node_list->array, sizeof(struct node) * node_list->len, 0) < 0) {
+        if (bufsize > 0) {
+            if (send(cfd, buffer, bufsize, 0) < 0) {
                 perror("send node list");
                 exit(1);
             }
         }
 
-        struct node node;
-        if (recv(cfd, &node, sizeof(struct node), MSG_WAITALL) < 0) {
+        struct packed_node n;
+        if (recv(cfd, &n, PACKED_NODE_SIZE, MSG_WAITALL) < 0) {
             perror("recv node info");
             exit(1);
         }
-        add_node(node_list, node.id, cfd, &node.saddr);
+        struct node node;
+        node.id = n.id;
+        node.sfd = cfd;
+        node.saddr.sin_family = AF_INET;
+        node.saddr.sin_addr.s_addr = n.ip;
+        node.saddr.sin_port = n.port;
+        add_node(node_list, &node);
         printf("New node list after accepting a node:\n");
-        print_nodes(node_list);
+        print_nodes(*node_list);
     }
 }
 
@@ -143,13 +148,12 @@ void log_nodes(int signum)
         perror("log_nodes: fopen logfile");
         return;
     }
-    if (fprintf(logfile, "Nodes connected to %d:\n", global_id) < 0) {
+    if (fprintf(logfile, "%d %s:%d\n", global_id, inet_ntoa(bind_addr.sin_addr), ntohs(bind_addr.sin_port)) < 0) {
         perror("log_nodes: fprintf logfile header");
         fclose(logfile);
         return;
     }
-    for (int i = 0; i < global_node_list.len; i++) {
-        struct node *node = &global_node_list.array[i];
+    for (struct node *node = global_node_list; node; node = node->next) {
         if (fprintf(logfile, "%d %s:%d\n", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port)) < 0) {
             perror("log_nodes: fprintf logfile");
             fclose(logfile);
@@ -162,9 +166,8 @@ void log_nodes(int signum)
 int main(int argc, char **argv)
 {
     int bindsock;
-    struct sockaddr_in bind_addr;
     struct sockaddr_in conn_addr;
-    /* struct node_list *node_list = create_node_list(); */
+    /* struct node *node_list = NULL; */
     /* int id = 1; */
 
     int is_connect = parse_cmdline(argc, argv, &bind_addr, &conn_addr);
@@ -173,7 +176,7 @@ int main(int argc, char **argv)
     if (is_connect) {
         global_id = init_distenv(&bind_addr, &conn_addr, &global_node_list);
         printf("self.id = %d\n", global_id);
-        print_nodes(&global_node_list);
+        print_nodes(global_node_list);
     }
 
     struct sigaction sa;

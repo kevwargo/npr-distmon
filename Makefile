@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-c -O2 -Wall -std=gnu99 -D_POSIX_C_SOURCE=200809L -Iinclude
+CFLAGS=-c -g -O2 -Wall -std=gnu99 -D_POSIX_C_SOURCE=200809L -Iinclude
 LD=gcc
 LDFLAGS=
 
