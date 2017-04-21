@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <netinet/in.h>
+#include <poll.h>
 
 #define PACKED_NODE_ID_SIZE (sizeof(int))
 #define PACKED_NODE_IP_SIZE (sizeof(uint32_t))
@@ -13,6 +14,7 @@ struct node {
     int id;
     int sfd;
     struct sockaddr_in saddr;
+    struct pollfd *pfd;
     struct node *prev;
     struct node *next;
 };
@@ -23,15 +25,22 @@ struct packed_node {
     in_port_t port;
 };
 
+struct node_list {
+    struct node *head;
+    struct node *tail;
+    int size;
+    struct pollfd *pfds;
+};
 
-extern struct node *add_node(struct node **list, struct node *node);
-extern int contains(struct node *list, int id);
-extern void print_nodes(struct node *list);
-extern void fprint_nodes(FILE *f, struct node *list);
-extern void delete_node(struct node **list, struct node *node);
-extern void delete_node_id(struct node **list, int id);
-extern void free_node_list(struct node **list);
-extern int count_nodes(struct node *list);
-extern uint8_t *pack_nodes(struct node *list, int *sizeptr);
+
+extern struct node_list create_node_list();
+extern struct node *add_node(struct node_list *list, struct node *node);
+extern int contains(struct node_list *list, int id);
+extern void print_nodes(struct node_list *list);
+extern void fprint_nodes(FILE *f, struct node_list *list);
+extern void delete_node(struct node_list *list, struct node *node);
+extern void delete_node_id(struct node_list *list, int id);
+extern void free_node_list(struct node_list *list);
+extern uint8_t *pack_nodes(struct node_list *list);
 
 #endif
