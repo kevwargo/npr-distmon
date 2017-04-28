@@ -13,7 +13,7 @@
 #include "socket.h"
 #include "events.h"
 
-struct node *global_node_list = NULL;
+struct node_list *global_node_list = NULL;
 int global_id = 1;
 struct sockaddr_in bind_addr;
 
@@ -33,7 +33,7 @@ int parse_cmdline(int argc, char **argv, struct sockaddr_in *bind_addr, struct s
     return 0;
 }
 
-int propagate(struct sockaddr_in *conn_addr, struct node **node_list)
+int propagate(struct sockaddr_in *conn_addr, struct node_list *node_list)
 {
     int connsock = socket_initconn(conn_addr);
     int node_id;
@@ -41,7 +41,7 @@ int propagate(struct sockaddr_in *conn_addr, struct node **node_list)
         perror("recv node id");
         exit(1);
     }
-    if (! contains(*node_list, node_id)) {
+    if (! contains(node_list, node_id)) {
         struct node node;
         node.id = node_id;
         node.sfd = connsock;
@@ -64,7 +64,7 @@ int propagate(struct sockaddr_in *conn_addr, struct node **node_list)
         }
         for (int offset = 0; offset <= bufsize - PACKED_NODE_SIZE; offset += PACKED_NODE_SIZE) {
             struct packed_node *node = (struct packed_node *)(buffer + offset);
-            if (! contains(*node_list, node->id)) {
+            if (! contains(node_list, node->id)) {
                 struct sockaddr_in saddr;
                 saddr.sin_family = AF_INET;
                 saddr.sin_addr.s_addr = node->ip;
@@ -75,18 +75,19 @@ int propagate(struct sockaddr_in *conn_addr, struct node **node_list)
                 }
             }
         }
+        free(buffer);
     }
 
     return id;
 }
 
-int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, struct node **node_list)
+int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, struct node_list *node_list)
 {
     struct packed_node self;
     self.id = propagate(conn_addr, node_list);
     self.ip = bind_addr->sin_addr.s_addr;
     self.port = bind_addr->sin_port;
-    for (struct node *node = *node_list; node; node = node->next) {
+    for (struct node *node = node_list->head; node; node = node->next) {
         if (send(node->sfd, &self, PACKED_NODE_SIZE, 0) < 0) {
             perror("send self node info");
             exit(1);
@@ -109,7 +110,7 @@ void log_nodes(int signum)
         fclose(logfile);
         return;
     }
-    for (struct node *node = global_node_list; node; node = node->next) {
+    for (struct node *node = global_node_list->head; node; node = node->next) {
         if (fprintf(logfile, "%d %s:%d\n", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port)) < 0) {
             perror("log_nodes: fprintf logfile");
             fclose(logfile);
@@ -128,9 +129,11 @@ int main(int argc, char **argv)
 
     int is_connect = parse_cmdline(argc, argv, &bind_addr, &conn_addr);
     bindsock = socket_initbind(&bind_addr);
+    global_node_list = create_node_list();
+    global_node_list->self_sock = bindsock;
 
     if (is_connect) {
-        global_id = init_distenv(&bind_addr, &conn_addr, &global_node_list);
+        global_id = init_distenv(&bind_addr, &conn_addr, global_node_list);
         printf("self.id = %d\n", global_id);
         print_nodes(global_node_list);
     }
@@ -143,7 +146,7 @@ int main(int argc, char **argv)
         perror("sigaction");
     }
 
-    event_loop(global_id, bindsock, &global_node_list);
+    event_loop(global_id, global_node_list);
 
     return 0;
 }

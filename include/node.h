@@ -29,11 +29,12 @@ struct node_list {
     struct node *head;
     struct node *tail;
     int size;
+    int self_sock;
     struct pollfd *pfds;
 };
 
 
-extern struct node_list create_node_list();
+extern struct node_list *create_node_list();
 extern struct node *add_node(struct node_list *list, struct node *node);
 extern int contains(struct node_list *list, int id);
 extern void print_nodes(struct node_list *list);

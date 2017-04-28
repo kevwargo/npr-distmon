@@ -29,7 +29,7 @@ int contains(struct node_list *list, int id)
     return 0;
 }
 
-struct node_list create_node_list()
+struct node_list *create_node_list()
 {
     struct node_list *list = (struct node_list *)malloc(sizeof(struct node_list));
     if (! list) {
@@ -37,6 +37,7 @@ struct node_list create_node_list()
         exit(1);
     }
     memset(list, 0, sizeof(struct node_list));
+    return list;
 }
 
 struct node *add_node(struct node_list *list, struct node *node)
@@ -45,12 +46,13 @@ struct node *add_node(struct node_list *list, struct node *node)
         return NULL;
     }
     struct node *new = (struct node *)malloc(sizeof(struct node));
-    memcpy(new, node, sizeof(sizeof(struct node)));
-    if (! list->tail) {
-        list->tail = list->head = new;
+    memcpy(new, node, sizeof(struct node));
+    new->next = NULL;
+    new->prev = list->tail;
+    if (list->size == 0) {
+        list->head = list->tail = new;
     } else {
         list->tail->next = new;
-        new->prev = list->tail;
         list->tail = new;
     }
     list->size++;
@@ -87,7 +89,9 @@ void delete_node_by_id(struct node_list *list, int id)
 
 void free_node_list(struct node_list *list)
 {
-    for (; *list; delete_node(list, *list)) ;
+    for (struct node *node = list->head; node; ) {
+        delete_node(list, node);
+    }
     free(list);
 }
 
@@ -99,10 +103,10 @@ uint8_t *pack_nodes(struct node_list *list)
     uint8_t *buffer = (uint8_t *)malloc(PACKED_NODE_SIZE * list->size);
     int offset = 0;
     for (struct node *node = list->head; node; node = node->next) {
-        struct packed_node *node = (struct packed_node *)(buffer + offset);
-        node->id = node->id;
-        node->ip = node->saddr.sin_addr.s_addr;
-        node->port = node->saddr.sin_port;
+        struct packed_node *packed = (struct packed_node *)(buffer + offset);
+        packed->id = node->id;
+        packed->ip = node->saddr.sin_addr.s_addr;
+        packed->port = node->saddr.sin_port;
         offset += PACKED_NODE_SIZE;
     }
     return buffer;

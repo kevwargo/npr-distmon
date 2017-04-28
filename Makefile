@@ -33,7 +33,7 @@ obj:
 $(foreach src, $(SOURCES), $(eval $(call DefineRule, $(src))))
 
 distmon: $(call SourcesToObjects, $(SOURCES))
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(LD) $(LDFLAGS) -o $@ $^ ../../../libhexdump.o
 
 clean:
 	rm -rf obj distmon

@@ -4,6 +4,6 @@
 #include "node.h"
 
 
-extern void event_loop(int id, int serv_sock, struct node **node_list);
+extern void event_loop(int id, struct node_list *node_list);
 
 #endif
