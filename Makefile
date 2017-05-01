@@ -7,9 +7,12 @@ SOURCES=src/distmon.c
 SOURCES+=src/node.c
 SOURCES+=src/socket.c
 SOURCES+=src/events.c
+SOURCES+=src/dllist.c
 
 HEADERS=include/node.h
 HEADERS+=include/socket.h
+HEADERS+=include/events.h
+HEADERS+=include/dllist.h
 
 
 define SourcesToObjects =

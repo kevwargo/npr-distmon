@@ -8,51 +8,54 @@
 #include <arpa/inet.h>
 #include "node.h"
 #include "events.h"
+#include "dllist.h"
+#include "distenv.h"
 
 
-int refresh_pollfds(struct node_list *node_list)
+int refresh_pollfds(struct distenv *distenv)
 {
-    int size = node_list->size + 1;
-    if (node_list->pfds) {
-        free(node_list->pfds);
+    int size = distenv->node_list->size + 1;
+    if (distenv->pfds) {
+        free(distenv->pfds);
     }
-    node_list->pfds = calloc(size, sizeof(struct pollfd));
-    node_list->pfds[0].fd = node_list->self_sock;
-    node_list->pfds[0].events = POLLIN;
+    distenv->pfds = calloc(size, sizeof(struct pollfd));
+    distenv->pfds[0].fd = distenv->self_sock;
+    distenv->pfds[0].events = POLLIN;
     printf("POLL: Registering serv_sock\n");
     int i = 1;
-    for (struct node *node = node_list->head; node; node = node->next) {
+    struct node *node;
+    dllist_foreach(node, distenv->node_list) {
         printf("POLL: Registering node %d\n", node->id);
-        node_list->pfds[i].fd = node->sfd;
-        node_list->pfds[i].events = POLLIN;
-        node->pfd = &node_list->pfds[i];
+        distenv->pfds[i].fd = node->sfd;
+        distenv->pfds[i].events = POLLIN;
+        node->pfd = &distenv->pfds[i];
         i++;
     }
     return size;
 }
 
-void accept_node(int id, struct node_list *node_list)
+void accept_node(struct distenv *distenv)
 {
     struct sockaddr_in c_addr;
     socklen_t c_addr_len = sizeof(struct sockaddr_in);
-    int cfd = accept(node_list->self_sock, (struct sockaddr *)&c_addr, &c_addr_len);
+    int cfd = accept(distenv->self_sock, (struct sockaddr *)&c_addr, &c_addr_len);
     if (cfd < 0) {
         perror("accept");
         exit(1);
     }
 
-    if (send(cfd, &id, sizeof(int), 0) < 0) {
+    if (send(cfd, &distenv->self_id, sizeof(int), 0) < 0) {
         perror("send self node id");
         exit(1);
     }
-    int bufsize = node_list->size * PACKED_NODE_SIZE;
+    int bufsize = distenv->node_list->size * PACKED_NODE_SIZE;
     if (send(cfd, &bufsize, sizeof(int), 0) < 0) {
         perror("send node list len");
         exit(1);
     }
     printf("sent node_list bufsize: %d\n", bufsize);
     if (bufsize > 0) {
-        uint8_t *buffer = pack_nodes(node_list);
+        uint8_t *buffer = pack_nodes(distenv->node_list);
         int sent = send(cfd, buffer, bufsize, 0);
         /* TODO */
         if (sent < bufsize) {
@@ -77,9 +80,9 @@ void accept_node(int id, struct node_list *node_list)
     node.saddr.sin_family = AF_INET;
     node.saddr.sin_addr.s_addr = n.ip;
     node.saddr.sin_port = n.port;
-    add_node(node_list, &node);
+    add_node(distenv->node_list, &node);
     printf("New node list after accepting a node:\n");
-    print_nodes(node_list);
+    print_nodes(distenv->node_list);
 }
 
 char *str_revents(short revents)
@@ -87,7 +90,7 @@ char *str_revents(short revents)
     if (revents == 0) {
         return NULL;
     }
-    char *result = (char *)calloc(13, 12);
+    char *result = (char *)calloc(40, 4);
     if (revents & POLLIN) {
         strcat(result, "POLLIN | ");
     }
@@ -121,11 +124,11 @@ char *str_revents(short revents)
     return result;
 }
  
-void event_loop(int id, struct node_list *node_list)
+void event_loop(struct distenv *distenv)
 {
-    int nfds = refresh_pollfds(node_list);
+    int nfds = refresh_pollfds(distenv);
     while (1) {
-        int selected = poll(node_list->pfds, nfds, -1);
+        int selected = poll(distenv->pfds, nfds, -1);
         if (selected < 0) {
             if (errno == EINTR) {
                 printf("EINTR caught on poll, restarting...\n");
@@ -135,12 +138,13 @@ void event_loop(int id, struct node_list *node_list)
             exit(1);
         }
         printf("poll returned %d\n", selected);
-        char *str = str_revents(node_list->pfds[0].revents);
+        char *str = str_revents(distenv->pfds[0].revents);
         if (str) {
             printf("server socket revents: %s\n", str);
             free(str);
         }
-        for (struct node *node = node_list->head; node; node = node->next) {
+        struct node *node;
+        dllist_foreach(node, distenv->node_list) {
             str = str_revents(node->pfd->revents);
             if (str) {
                 printf("node %d revents: %s\n", node->id, str);
@@ -155,16 +159,16 @@ void event_loop(int id, struct node_list *node_list)
                         perror(" with error");
                     }
                     putc('\n', stderr);
-                    delete_node(node_list, node);
-                    nfds = refresh_pollfds(node_list);
+                    dllist_delete(distenv->node_list, node);
+                    nfds = refresh_pollfds(distenv);
                 } else {
                     printf("Node %d sent char %x\n", node->id, c);
                 }
             }
         }
-        if (node_list->pfds[0].revents & POLLIN) {
-            accept_node(id, node_list);
-            nfds = refresh_pollfds(node_list);
+        if (distenv->pfds[0].revents & POLLIN) {
+            accept_node(distenv);
+            nfds = refresh_pollfds(distenv);
         }
     }
 }

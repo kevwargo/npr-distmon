@@ -4,24 +4,26 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "node.h"
+#include "dllist.h"
 
-void fprint_nodes(FILE *f, struct node_list *list)
+void fprint_nodes(FILE *f, struct dllist *list)
 {
-    for (struct node *node = list->head; node; node = node->next) {
-        fprintf(f, "%d %s:%d (p: %lx, n: %lx)\n", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port), (unsigned long int)node->prev, (unsigned long int)node->next);
+    struct node *node;
+    dllist_foreach(node, list) {
+        fprintf(f, "%d %s:%d\n", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port));
     }
     fprintf(f, "\n");
 }
 
-void print_nodes(struct node_list *list)
+void print_nodes(struct dllist *list)
 {
     fprint_nodes(stdout, list);
 }
 
-
-int contains(struct node_list *list, int id)
+int contains(struct dllist *list, int id)
 {
-    for (struct node *node = list->head; node; node = node->next) {
+    struct node *node;
+    dllist_foreach(node, list) {
         if (node->id == id) {
             return 1;
         }
@@ -29,80 +31,34 @@ int contains(struct node_list *list, int id)
     return 0;
 }
 
-struct node_list *create_node_list()
+struct node *add_node(struct dllist *list, struct node *node)
 {
-    struct node_list *list = (struct node_list *)malloc(sizeof(struct node_list));
-    if (! list) {
-        perror("create node list");
-        exit(1);
+    if (! contains(list, node->id)) {
+        return dllist_add(list, node);
     }
-    memset(list, 0, sizeof(struct node_list));
-    return list;
+    return NULL;
 }
 
-struct node *add_node(struct node_list *list, struct node *node)
+void delete_node_by_id(struct dllist *list, int id)
 {
-    if (contains(list, node->id)) {
-        return NULL;
-    }
-    struct node *new = (struct node *)malloc(sizeof(struct node));
-    memcpy(new, node, sizeof(struct node));
-    new->next = NULL;
-    new->prev = list->tail;
-    if (list->size == 0) {
-        list->head = list->tail = new;
-    } else {
-        list->tail->next = new;
-        list->tail = new;
-    }
-    list->size++;
-    return new;
-}
-
-void delete_node(struct node_list *list, struct node *node)
-{
-    if (list->head == node) {
-        list->head = node->next;
-    }
-    if (list->tail == node) {
-        list->tail = node->prev;
-    }
-    if (node->next) {
-        node->next->prev = node->prev;
-    }
-    if (node->prev) {
-        node->prev->next = node->next;
-    }
-    list->size--;
-    free(node);
-}
-
-void delete_node_by_id(struct node_list *list, int id)
-{
-    for (struct node *node = list->head; node; node = node->next) {
+    struct node *node;
+    dllist_foreach(node, list) {
         if (node->id == id) {
-            delete_node(list, node);
+            dllist_delete(list, node);
             return;
         }
     }
 }
 
-void free_node_list(struct node_list *list)
-{
-    for (struct node *node = list->head; node; ) {
-        delete_node(list, node);
-    }
-    free(list);
-}
-
-uint8_t *pack_nodes(struct node_list *list)
+uint8_t *pack_nodes(struct dllist *list)
 {
     if (list->size <= 0) {
         return NULL;
     }
     uint8_t *buffer = (uint8_t *)malloc(PACKED_NODE_SIZE * list->size);
     int offset = 0;
-    for (struct node *node = list->head; node; node = node->next) {
+    struct node *node;
+    dllist_foreach(node, list) {
         struct packed_node *packed = (struct packed_node *)(buffer + offset);
         packed->id = node->id;
         packed->ip = node->saddr.sin_addr.s_addr;

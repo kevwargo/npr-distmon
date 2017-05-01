@@ -1,9 +1,8 @@
 #ifndef _EVENTS_H_INCLUDED_
 #define _EVENTS_H_INCLUDED_
 
-#include "node.h"
+#include "distenv.h"
 
-
-extern void event_loop(int id, struct node_list *node_list);
+extern void event_loop(struct distenv *distenv);
 
 #endif

@@ -12,10 +12,10 @@
 #include "node.h"
 #include "socket.h"
 #include "events.h"
+#include "distenv.h"
 
-struct node_list *global_node_list = NULL;
-int global_id = 1;
-struct sockaddr_in bind_addr;
+struct distenv global_distenv;
+
 
 int parse_cmdline(int argc, char **argv, struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr)
 {
@@ -33,7 +33,7 @@ int parse_cmdline(int argc, char **argv, struct sockaddr_in *bind_addr, struct s
     return 0;
 }
 
-int propagate(struct sockaddr_in *conn_addr, struct node_list *node_list)
+int propagate(struct sockaddr_in *conn_addr, struct dllist *node_list)
 {
     int connsock = socket_initconn(conn_addr);
     int node_id;
@@ -81,13 +81,14 @@ int propagate(struct sockaddr_in *conn_addr, struct node_list *node_list)
     return id;
 }
 
-int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, struct node_list *node_list)
+int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, struct dllist *node_list)
 {
     struct packed_node self;
     self.id = propagate(conn_addr, node_list);
     self.ip = bind_addr->sin_addr.s_addr;
     self.port = bind_addr->sin_port;
-    for (struct node *node = node_list->head; node; node = node->next) {
+    struct node *node;
+    dllist_foreach(node, global_distenv.node_list) {
         if (send(node->sfd, &self, PACKED_NODE_SIZE, 0) < 0) {
             perror("send self node info");
             exit(1);
@@ -99,18 +100,25 @@ int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, s
 void log_nodes(int signum)
 {
     char logname[127];
-    snprintf(logname, 127, "nodes-%03d.log", global_id);
+    snprintf(logname, 127, "nodes-%03d.log", global_distenv.self_id);
     FILE *logfile = fopen(logname, "w+");
     if (! logfile) {
         perror("log_nodes: fopen logfile");
         return;
     }
-    if (fprintf(logfile, "%d %s:%d\n", global_id, inet_ntoa(bind_addr.sin_addr), ntohs(bind_addr.sin_port)) < 0) {
+    struct sockaddr_in bind_addr;
+    socklen_t addrlen;
+    if (getsockname(global_distenv.self_sock, (struct sockaddr *)&bind_addr, &addrlen) < 0) {
+        perror("getsockname");
+        return;
+    }
+    if (fprintf(logfile, "%d %s:%d\n", global_distenv.self_id, inet_ntoa(bind_addr.sin_addr), ntohs(bind_addr.sin_port)) < 0) {
         perror("log_nodes: fprintf logfile header");
         fclose(logfile);
         return;
     }
-    for (struct node *node = global_node_list->head; node; node = node->next) {
+    struct node *node;
+    dllist_foreach(node, global_distenv.node_list) {
         if (fprintf(logfile, "%d %s:%d\n", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port)) < 0) {
             perror("log_nodes: fprintf logfile");
             fclose(logfile);
@@ -124,18 +132,19 @@ int main(int argc, char **argv)
 {
     int bindsock;
     struct sockaddr_in conn_addr;
+    struct sockaddr_in bind_addr;
     /* struct node *node_list = NULL; */
     /* int id = 1; */
 
     int is_connect = parse_cmdline(argc, argv, &bind_addr, &conn_addr);
     bindsock = socket_initbind(&bind_addr);
-    global_node_list = create_node_list();
-    global_node_list->self_sock = bindsock;
+    global_distenv.node_list = dllist_create();
+    global_distenv.self_sock = bindsock;
 
     if (is_connect) {
-        global_id = init_distenv(&bind_addr, &conn_addr, global_node_list);
-        printf("self.id = %d\n", global_id);
-        print_nodes(global_node_list);
+        global_distenv.self_id = init_distenv(&bind_addr, &conn_addr, global_distenv.node_list);
+        printf("self.id = %d\n", global_distenv.self_id);
+        print_nodes(global_distenv.node_list);
     }
 
     struct sigaction sa;
@@ -146,7 +155,7 @@ int main(int argc, char **argv)
         perror("sigaction");
     }
 
-    event_loop(global_id, global_node_list);
+    event_loop(&global_distenv);
 
     return 0;
 }
