@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <poll.h>
 #include "dllist.h"
+#include "message.h"
 
 #define PACKED_NODE_ID_SIZE (sizeof(int))
 #define PACKED_NODE_IP_SIZE (sizeof(uint32_t))
@@ -16,6 +17,7 @@ struct node {
     int sfd;
     struct sockaddr_in saddr;
     struct pollfd *pfd;
+    struct message *msg_part;
 };
 
 struct packed_node {

@@ -10,6 +10,8 @@
 #include "events.h"
 #include "dllist.h"
 #include "distenv.h"
+#include "message.h"
+#include "debug.h"
 
 
 int refresh_pollfds(struct distenv *distenv)
@@ -21,11 +23,11 @@ int refresh_pollfds(struct distenv *distenv)
     distenv->pfds = calloc(size, sizeof(struct pollfd));
     distenv->pfds[0].fd = distenv->self_sock;
     distenv->pfds[0].events = POLLIN;
-    printf("POLL: Registering serv_sock\n");
+    debug_printf("POLL: Registering serv_sock\n");
     int i = 1;
     struct node *node;
     dllist_foreach(node, distenv->node_list) {
-        printf("POLL: Registering node %d\n", node->id);
+        /* debug_printf("POLL: Registering node %d\n", node->id); */
         distenv->pfds[i].fd = node->sfd;
         distenv->pfds[i].events = POLLIN;
         node->pfd = &distenv->pfds[i];
@@ -40,30 +42,30 @@ void accept_node(struct distenv *distenv)
     socklen_t c_addr_len = sizeof(struct sockaddr_in);
     int cfd = accept(distenv->self_sock, (struct sockaddr *)&c_addr, &c_addr_len);
     if (cfd < 0) {
-        perror("accept");
+        debug_perror("accept");
         exit(1);
     }
 
     if (send(cfd, &distenv->self_id, sizeof(int), 0) < 0) {
-        perror("send self node id");
+        debug_perror("send self node id");
         exit(1);
     }
     int bufsize = distenv->node_list->size * PACKED_NODE_SIZE;
     if (send(cfd, &bufsize, sizeof(int), 0) < 0) {
-        perror("send node list len");
+        debug_perror("send node list len");
         exit(1);
     }
-    printf("sent node_list bufsize: %d\n", bufsize);
+    debug_printf("sent node_list bufsize: %d\n", bufsize);
     if (bufsize > 0) {
         uint8_t *buffer = pack_nodes(distenv->node_list);
         int sent = send(cfd, buffer, bufsize, 0);
         /* TODO */
         if (sent < bufsize) {
-            fprintf(stderr, "SENT LESS THAN BUFSIZE!!!\n");
+            debug_fprintf(stderr, "SENT LESS THAN BUFSIZE!!!\n");
             exit(2);
         }
         if (sent < 0) {
-            perror("send node list");
+            debug_perror("send node list");
             exit(1);
         }
         free(buffer);
@@ -71,7 +73,7 @@ void accept_node(struct distenv *distenv)
 
     struct packed_node n;
     if (recv(cfd, &n, PACKED_NODE_SIZE, MSG_WAITALL) < 0) {
-        perror("recv node info");
+        debug_perror("recv node info");
         exit(1);
     }
     struct node node;
@@ -81,7 +83,7 @@ void accept_node(struct distenv *distenv)
     node.saddr.sin_addr.s_addr = n.ip;
     node.saddr.sin_port = n.port;
     add_node(distenv->node_list, &node);
-    printf("New node list after accepting a node:\n");
+    debug_printf("New node list after accepting a node:\n");
     print_nodes(distenv->node_list);
 }
 
@@ -123,6 +125,12 @@ char *str_revents(short revents)
     }
     return result;
 }
+
+void node_disconnect(struct dllist *list, struct node *node)
+{
+    debug_fprintf(stderr, "Node %d disconnected\n", node->id);
+    dllist_delete(list, node);
+}
  
 void event_loop(struct distenv *distenv)
 {
@@ -131,38 +139,37 @@ void event_loop(struct distenv *distenv)
         int selected = poll(distenv->pfds, nfds, -1);
         if (selected < 0) {
             if (errno == EINTR) {
-                printf("EINTR caught on poll, restarting...\n");
+                debug_printf("EINTR caught on poll, restarting...\n");
                 continue;
             }
-            perror("poll");
+            debug_perror("poll");
             exit(1);
         }
-        printf("poll returned %d\n", selected);
+        debug_printf("poll returned %d: ", selected);
         char *str = str_revents(distenv->pfds[0].revents);
         if (str) {
-            printf("server socket revents: %s\n", str);
+            printf("s: %s; ", str);
             free(str);
         }
         struct node *node;
         dllist_foreach(node, distenv->node_list) {
+            char *str = str_revents(node->pfd->revents);
+            if (str) {
+                printf("%d: %s; ", node->id, str);
+                free(str);
+            }
+        }
+        printf("\n");
+        dllist_foreach(node, distenv->node_list) {
             str = str_revents(node->pfd->revents);
             if (str) {
-                printf("node %d revents: %s\n", node->id, str);
+                debug_printf("node %d revents: %s\n", node->id, str);
                 free(str);
             }
             if (node->pfd->revents & POLLIN) {
-                char c;
-                int recved = recv(node->sfd, &c, 1, 0);
-                if (recved <= 0) {
-                    fprintf(stderr, "Node %d disconnected", node->id);
-                    if (recved < 0) {
-                        perror(" with error");
-                    }
-                    putc('\n', stderr);
-                    dllist_delete(distenv->node_list, node);
+                if (handle_message(distenv, node) < 0) {
+                    node_disconnect(distenv->node_list, node);
                     nfds = refresh_pollfds(distenv);
-                } else {
-                    printf("Node %d sent char %x\n", node->id, c);
                 }
             }
         }

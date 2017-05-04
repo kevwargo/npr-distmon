@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include "dllist.h"
+#include "debug.h"
 
 
 struct dllist *dllist_create()
 {
     struct dllist *list = (struct dllist *)malloc(sizeof(struct dllist));
     if (! list) {
-        perror("create dllist");
+        debug_perror("create dllist");
         exit(1);
     }
     memset(list, 0, sizeof(struct dllist));

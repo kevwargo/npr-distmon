@@ -6,156 +6,165 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <pthread.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <execinfo.h>
 #include "node.h"
 #include "socket.h"
 #include "events.h"
 #include "distenv.h"
 
-struct distenv global_distenv;
+struct distenv *global_distenv = NULL;
+char *log_prefix = NULL;
+
+void debug_printf(char *fmt, ...)
+{
+    char *buf = malloc(strlen(fmt) + strlen(log_prefix) + 20);
+    strcpy(buf, log_prefix);
+    strcat(buf, fmt);
+    va_list args;
+    va_start(args, fmt);
+    vprintf(buf, args);
+    va_end(args);
+    free(buf);
+}
+void debug_fprintf(FILE *fp, char *fmt, ...)
+{
+    char *buf = malloc(strlen(fmt) + strlen(log_prefix) + 20);
+    strcpy(buf, log_prefix);
+    strcat(buf, fmt);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(fp, buf, args);
+    va_end(args);
+    free(buf);
+}
+void debug_perror(char *msg)
+{
+    char *buf = malloc(strlen(msg) + strlen(log_prefix) + 20);
+    strcpy(buf, log_prefix);
+    strcat(buf, msg);
+    perror(buf);
+    free(buf);
+}
 
 
 int parse_cmdline(int argc, char **argv, struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr)
 {
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s bind_host:bind_port [connect_host:connect_port]\n\n", argv[0]);
+        
         exit(1);
     }
-    printf("Bind address: %s\n", argv[1]);
+    debug_printf("Bind address: %s\n", argv[1]);
     socket_parseaddr(argv[1], bind_addr);
     if (argc > 2) {
-        printf("Connect address: %s\n", argv[2]);
+        debug_printf("Connect address: %s\n", argv[2]);
         socket_parseaddr(argv[2], conn_addr);
         return 1;
     }
     return 0;
 }
 
-int propagate(struct sockaddr_in *conn_addr, struct dllist *node_list)
-{
-    int connsock = socket_initconn(conn_addr);
-    int node_id;
-    if (recv(connsock, &node_id, sizeof(int), MSG_WAITALL) < 0) {
-        perror("recv node id");
-        exit(1);
-    }
-    if (! contains(node_list, node_id)) {
-        struct node node;
-        node.id = node_id;
-        node.sfd = connsock;
-        memcpy(&node.saddr, conn_addr, sizeof(struct sockaddr_in));
-        add_node(node_list, &node);
-    }
-
-    int id = node_id + 1;
-    int bufsize;
-    uint8_t *buffer;
-    if (recv(connsock, &bufsize, sizeof(int), MSG_WAITALL) < 0) {
-        perror("recv node list len");
-        exit(1);
-    }
-    if (bufsize > 0) {
-        buffer = (uint8_t *)malloc(bufsize);
-        if (recv(connsock, buffer, bufsize, MSG_WAITALL) < 0) {
-            perror("recv node list");
-            exit(1);
-        }
-        for (int offset = 0; offset <= bufsize - PACKED_NODE_SIZE; offset += PACKED_NODE_SIZE) {
-            struct packed_node *node = (struct packed_node *)(buffer + offset);
-            if (! contains(node_list, node->id)) {
-                struct sockaddr_in saddr;
-                saddr.sin_family = AF_INET;
-                saddr.sin_addr.s_addr = node->ip;
-                saddr.sin_port = node->port;
-                int temp_id = propagate(&saddr, node_list);
-                if (temp_id > id) {
-                    id = temp_id;
-                }
-            }
-        }
-        free(buffer);
-    }
-
-    return id;
-}
-
-int init_distenv(struct sockaddr_in *bind_addr, struct sockaddr_in *conn_addr, struct dllist *node_list)
-{
-    struct packed_node self;
-    self.id = propagate(conn_addr, node_list);
-    self.ip = bind_addr->sin_addr.s_addr;
-    self.port = bind_addr->sin_port;
-    struct node *node;
-    dllist_foreach(node, global_distenv.node_list) {
-        if (send(node->sfd, &self, PACKED_NODE_SIZE, 0) < 0) {
-            perror("send self node info");
-            exit(1);
-        }
-    }
-    return self.id;
-}
-
 void log_nodes(int signum)
 {
     char logname[127];
-    snprintf(logname, 127, "nodes-%03d.log", global_distenv.self_id);
+    snprintf(logname, 127, "nodes-%03d.log", global_distenv->self_id);
     FILE *logfile = fopen(logname, "w+");
     if (! logfile) {
-        perror("log_nodes: fopen logfile");
+        debug_perror("log_nodes: fopen logfile");
         return;
     }
     struct sockaddr_in bind_addr;
     socklen_t addrlen;
-    if (getsockname(global_distenv.self_sock, (struct sockaddr *)&bind_addr, &addrlen) < 0) {
-        perror("getsockname");
+    if (getsockname(global_distenv->self_sock, (struct sockaddr *)&bind_addr, &addrlen) < 0) {
+        debug_perror("getsockname");
         return;
     }
-    if (fprintf(logfile, "%d %s:%d\n", global_distenv.self_id, inet_ntoa(bind_addr.sin_addr), ntohs(bind_addr.sin_port)) < 0) {
-        perror("log_nodes: fprintf logfile header");
-        fclose(logfile);
-        return;
-    }
+    debug_fprintf(logfile, "%d %s:%d\n", global_distenv->self_id, inet_ntoa(bind_addr.sin_addr), ntohs(bind_addr.sin_port));
     struct node *node;
-    dllist_foreach(node, global_distenv.node_list) {
-        if (fprintf(logfile, "%d %s:%d\n", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port)) < 0) {
-            perror("log_nodes: fprintf logfile");
-            fclose(logfile);
-            return;
-        }
+    dllist_foreach(node, global_distenv->node_list) {
+        debug_fprintf(logfile, "%d %s:%d\n", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port));
     }
     fclose(logfile);
 }
 
+void on_term(int signum)
+{
+    char filename[32];
+    struct sockaddr_in addr;
+    socklen_t addr_len;
+    if (getsockname(global_distenv->self_sock, (struct sockaddr *)&addr, &addr_len) < 0) {
+        perror("signal: getsockname");
+    }
+    snprintf(filename, 32, "core-%d.log", addr.sin_port);
+    int f = open(filename, O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+    if (f < 0) {
+        perror("signal: open");
+        exit(1);
+    }
+    void *stack[32];
+    size_t stack_size = backtrace(stack, 32);
+    if (dprintf(f, "Caught %s\n", strsignal(signum)) < 0) {
+        perror("signal: dprintf");
+        exit(1);
+    }
+    backtrace_symbols_fd(stack, stack_size, f);
+    if (close(f) < 0) {
+        perror("signal: close");
+        exit(1);
+    }
+    exit(0);
+}
+
 int main(int argc, char **argv)
 {
-    int bindsock;
-    struct sockaddr_in conn_addr;
-    struct sockaddr_in bind_addr;
-    /* struct node *node_list = NULL; */
-    /* int id = 1; */
-
-    int is_connect = parse_cmdline(argc, argv, &bind_addr, &conn_addr);
-    bindsock = socket_initbind(&bind_addr);
-    global_distenv.node_list = dllist_create();
-    global_distenv.self_sock = bindsock;
-
-    if (is_connect) {
-        global_distenv.self_id = init_distenv(&bind_addr, &conn_addr, global_distenv.node_list);
-        printf("self.id = %d\n", global_distenv.self_id);
-        print_nodes(global_distenv.node_list);
+    int log_prefix_len = 0;
+    for (int i = 0; i < argc; i++) {
+        log_prefix_len += strlen(argv[i]);
+        log_prefix_len++; // space or null-byte
     }
+    log_prefix_len += 20; // colon and space
+    log_prefix = malloc(log_prefix_len);
+    log_prefix[0] = '\0';
+    for (int i = 0; i < argc; i++) {
+        strcat(log_prefix, argv[i]);
+        strcat(log_prefix, " ");
+    }
+    strcat(log_prefix, ": ");
+    
+
+    global_distenv = distenv_init(argc > 1 ? argv[1] : NULL, argc > 2 ? argv[2] : NULL);
+    if (! global_distenv) {
+        debug_fprintf(stderr, "Usage: %s bind_host:bind_port [connect_host:connect_port]\n\n", argv[0]);
+        return 1;
+    }
+
+    debug_printf("self.id = %d\n", global_distenv->self_id);
+    print_nodes(global_distenv->node_list);
 
     struct sigaction sa;
     memset(&sa, 0, sizeof(struct sigaction));
-    sa.sa_handler = log_nodes;
     sa.sa_flags = SA_RESTART;
+    sa.sa_handler = log_nodes;
     if (sigaction(SIGUSR1, &sa, NULL) < 0) {
-        perror("sigaction");
+        debug_perror("sigaction USR1");
     }
 
-    event_loop(&global_distenv);
+    /* sa.sa_handler = on_term; */
+    /* if (sigaction(SIGTERM, &sa, NULL) < 0) { */
+    /*     debug_perror("sigaction TERM"); */
+    /* } */
+    /* if (sigaction(SIGSEGV, &sa, NULL) < 0) { */
+    /*     debug_perror("sigaction SEGV"); */
+    /* } */
+    signal(SIGPIPE, SIG_IGN);
+
+    event_loop(global_distenv);
 
     return 0;
 }

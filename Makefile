@@ -7,12 +7,16 @@ SOURCES=src/distmon.c
 SOURCES+=src/node.c
 SOURCES+=src/socket.c
 SOURCES+=src/events.c
+SOURCES+=src/message.c
 SOURCES+=src/dllist.c
+SOURCES+=src/distenv.c
 
 HEADERS=include/node.h
 HEADERS+=include/socket.h
 HEADERS+=include/events.h
+HEADERS+=include/message.h
 HEADERS+=include/dllist.h
+HEADERS+=include/debug.h
 
 
 define SourcesToObjects =
@@ -36,6 +40,6 @@ obj:
 $(foreach src, $(SOURCES), $(eval $(call DefineRule, $(src))))
 
 distmon: $(call SourcesToObjects, $(SOURCES))
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(LD) $(LDFLAGS) -o $@ $^ ../../../libhexdump.o
 clean:
 	rm -rf obj distmon
