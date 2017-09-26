@@ -16,7 +16,7 @@ int handle_message(struct distenv *distenv, struct node *node)
     
     pthread_mutex_lock(distenv->msg_buffer->mutex);
 
-    DEBUG_PRINTF("message: node: %d msg_part %p\n", node->id, node->msg_part);
+    DEBUG_PRINTF("message: node: %d msg_part %p", node->id, node->msg_part);
     if (node->msg_part) {
         message = node->msg_part;
     } else {
@@ -29,7 +29,7 @@ int handle_message(struct distenv *distenv, struct node *node)
             if (ret < 0) {
                 DEBUG_PERROR("recv message header from a node");
             } else {
-                DEBUG_FPRINTF(stderr, "Node %d disconnected while receiving message\n", node->id);
+                DEBUG_FPRINTF(stderr, "Node %d disconnected while receiving message", node->id);
             }
             goto _handle_message_error;
         }
@@ -51,7 +51,7 @@ int handle_message(struct distenv *distenv, struct node *node)
             goto _handle_message_error;
         }
     } else if (received == 0) {
-        DEBUG_FPRINTF(stderr, "Node %d disconnected while receiving message\n", node->id);
+        DEBUG_FPRINTF(stderr, "Node %d disconnected while receiving message", node->id);
         goto _handle_message_error;
     } else {
         message->received += received;

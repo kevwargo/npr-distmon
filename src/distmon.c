@@ -30,10 +30,10 @@ int parse_cmdline(int argc, char **argv, struct sockaddr_in *bind_addr, struct s
         
         exit(1);
     }
-    DEBUG_PRINTF("Bind address: %s\n", argv[1]);
+    DEBUG_PRINTF("Bind address: %s", argv[1]);
     socket_parseaddr(argv[1], bind_addr);
     if (argc > 2) {
-        DEBUG_PRINTF("Connect address: %s\n", argv[2]);
+        DEBUG_PRINTF("Connect address: %s", argv[2]);
         socket_parseaddr(argv[2], conn_addr);
         return 1;
     }
@@ -46,11 +46,11 @@ int distmond(int argc, char **argv)
     init_log(argc, argv);
     global_distenv = distenv_init(argc > 1 ? argv[1] : NULL, argc > 2 ? argv[2] : NULL);
     if (! global_distenv) {
-        DEBUG_FPRINTF(stderr, "Usage: %s bind_host:bind_port [connect_host:connect_port]\n\n", argv[0]);
+        DEBUG_FPRINTF(stderr, "Usage: %s bind_host:bind_port [connect_host:connect_port]\n", argv[0]);
         return 1;
     }
 
-    DEBUG_PRINTF("self.id = %d\n", global_distenv->self_id);
+    DEBUG_PRINTF("self.id = %d", global_distenv->self_id);
     print_nodes(global_distenv->node_list);
 
     struct sigaction sa;

@@ -57,7 +57,7 @@ int socket_parseaddr(const char *s, struct sockaddr_in *saddr)
     }
     char *port = strchr(ip, ':');
     if (! port) {
-        DEBUG_FPRINTF(stderr, "Socket address must be of format HOST:PORT\n");
+        DEBUG_FPRINTF(stderr, "Socket address must be of format HOST:PORT");
         return -1;
     }
     *port = '\0';
@@ -69,7 +69,7 @@ int socket_parseaddr(const char *s, struct sockaddr_in *saddr)
     hints.ai_family = AF_INET;
     int ret = getaddrinfo(ip, port, &hints, &ai);
     if (ret != 0) {
-        DEBUG_FPRINTF(stderr, "getaddrinfo error: %s\n", gai_strerror(ret));
+        DEBUG_FPRINTF(stderr, "getaddrinfo error: %s", gai_strerror(ret));
         return -1;
     }
     memcpy(saddr, ai->ai_addr, sizeof(struct sockaddr_in));

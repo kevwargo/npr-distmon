@@ -22,10 +22,10 @@ void log_nodes(int signum)
         DEBUG_PERROR("getsockname");
         return;
     }
-    DEBUG_FPRINTF(logfile, "%d %s:%d\n", global_distenv->self_id, inet_ntoa(bind_addr.sin_addr), ntohs(bind_addr.sin_port));
+    DEBUG_FPRINTF(logfile, "%d %s:%d", global_distenv->self_id, inet_ntoa(bind_addr.sin_addr), ntohs(bind_addr.sin_port));
     struct node *node;
     dllist_foreach(node, global_distenv->node_list) {
-        DEBUG_FPRINTF(logfile, "%d %s:%d\n", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port));
+        DEBUG_FPRINTF(logfile, "%d %s:%d", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port));
     }
     fclose(logfile);
 }

@@ -22,10 +22,10 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
 
     struct sockaddr_in bind_addr;
     if (socket_parseaddr(bind_param, &bind_addr) < 0) {
-        DEBUG_FPRINTF(stderr, "Error while parsing bind address\n");
+        DEBUG_FPRINTF(stderr, "Error while parsing bind address");
         return NULL;
     }
-    DEBUG_PRINTF("Bound to %s\n", bind_param);
+    DEBUG_PRINTF("Bound to %s", bind_param);
 
     struct distenv *distenv = (struct distenv *)malloc(sizeof(struct distenv));
     memset(distenv, 0, sizeof(struct distenv));
@@ -37,16 +37,16 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
     if (conn_param) {
         struct sockaddr_in conn_addr;
         if (socket_parseaddr(conn_param, &conn_addr) < 0) {
-            DEBUG_FPRINTF(stderr, "Error while parsing connect address\n");
+            DEBUG_FPRINTF(stderr, "Error while parsing connect address");
             free(distenv);
             return NULL;
         }
         if (distenv_connect(distenv, &conn_addr) < 0) {
-            DEBUG_FPRINTF(stderr, "Error while connecting to other nodes\n");
+            DEBUG_FPRINTF(stderr, "Error while connecting to other nodes");
             free(distenv);
             return NULL;
         }
-        DEBUG_PRINTF("Connected to %s\n", conn_param);
+        DEBUG_PRINTF("Connected to %s", conn_param);
     }
 
     distenv->msg_buffer->list = dllist_create();
