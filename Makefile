@@ -1,7 +1,7 @@
 CC=gcc
-CFLAGS=-c -g -O2 -Wall -std=gnu99 -D_POSIX_C_SOURCE=200809L -Iinclude
+CFLAGS=-c -g -O2 -Wall -std=gnu99 -D_POSIX_C_SOURCE=200809L -Iinclude -pthread
 LD=gcc
-LDFLAGS=
+LDFLAGS=-pthread
 
 SOURCES=src/distmon.c
 SOURCES+=src/node.c
@@ -10,6 +10,7 @@ SOURCES+=src/events.c
 SOURCES+=src/message.c
 SOURCES+=src/dllist.c
 SOURCES+=src/distenv.c
+SOURCES+=src/debug.c
 
 HEADERS=include/node.h
 HEADERS+=include/socket.h
@@ -37,9 +38,10 @@ all: obj distmon
 obj:
 	mkdir -p obj
 
-$(foreach src, $(SOURCES), $(eval $(call DefineRule, $(src))))
-
 distmon: $(call SourcesToObjects, $(SOURCES))
 	$(LD) $(LDFLAGS) -o $@ $^ ../../../libhexdump.o
 clean:
 	rm -rf obj distmon
+
+$(foreach src, $(SOURCES), $(eval $(call DefineRule, $(src))))
+

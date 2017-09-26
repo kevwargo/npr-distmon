@@ -22,10 +22,10 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
 
     struct sockaddr_in bind_addr;
     if (socket_parseaddr(bind_param, &bind_addr) < 0) {
-        debug_fprintf(stderr, "Error while parsing bind address\n");
+        DEBUG_FPRINTF(stderr, "Error while parsing bind address\n");
         return NULL;
     }
-    debug_printf("Bound to %s\n", bind_param);
+    DEBUG_PRINTF("Bound to %s\n", bind_param);
 
     struct distenv *distenv = (struct distenv *)malloc(sizeof(struct distenv));
     memset(distenv, 0, sizeof(struct distenv));
@@ -37,16 +37,16 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
     if (conn_param) {
         struct sockaddr_in conn_addr;
         if (socket_parseaddr(conn_param, &conn_addr) < 0) {
-            debug_fprintf(stderr, "Error while parsing connect address\n");
+            DEBUG_FPRINTF(stderr, "Error while parsing connect address\n");
             free(distenv);
             return NULL;
         }
         if (distenv_connect(distenv, &conn_addr) < 0) {
-            debug_fprintf(stderr, "Error while connecting to other nodes\n");
+            DEBUG_FPRINTF(stderr, "Error while connecting to other nodes\n");
             free(distenv);
             return NULL;
         }
-        debug_printf("Connected to %s\n", conn_param);
+        DEBUG_PRINTF("Connected to %s\n", conn_param);
     }
 
     distenv->msg_buffer->list = dllist_create();
@@ -63,24 +63,24 @@ static int distenv_connect(struct distenv *distenv, struct sockaddr_in *conn_add
     struct sockaddr_in bind_addr;
     socklen_t addrlen;
     if (getsockname(distenv->self_sock, (struct sockaddr *)&bind_addr, &addrlen) < 0) {
-        debug_perror("getsockname");
+        DEBUG_PERROR("getsockname");
         return -1;
     }
-    debug_printf("bind_addr: ");
+    DEBUG_PRINTF("bind_addr: ");
     hexdump(&bind_addr, sizeof(struct sockaddr_in));
 
     struct packed_node self;
     self.id = propagate(conn_addr, distenv->node_list);
     self.ip = bind_addr.sin_addr.s_addr;
     self.port = bind_addr.sin_port;
-    debug_printf("self: ");
+    DEBUG_PRINTF("self: ");
     hexdump(&self, sizeof(struct sockaddr_in));
 
 
     struct node *node;
     dllist_foreach(node, distenv->node_list) {
         if (send(node->sfd, &self, PACKED_NODE_SIZE, 0) < 0) {
-            debug_perror("send self node info");
+            DEBUG_PERROR("send self node info");
             return -1;
         }
     }
@@ -95,11 +95,12 @@ static int propagate(struct sockaddr_in *conn_addr, struct dllist *node_list)
     int connsock = socket_initconn(conn_addr);
     int node_id;
     if (recv(connsock, &node_id, sizeof(int), MSG_WAITALL) < 0) {
-        debug_perror("recv node id");
+        DEBUG_PERROR("recv node id");
         exit(1);
     }
     if (! contains(node_list, node_id)) {
         struct node node;
+        memset(&node, 0, sizeof(struct node));
         node.id = node_id;
         node.sfd = connsock;
         memcpy(&node.saddr, conn_addr, sizeof(struct sockaddr_in));
@@ -110,13 +111,13 @@ static int propagate(struct sockaddr_in *conn_addr, struct dllist *node_list)
     int bufsize;
     uint8_t *buffer;
     if (recv(connsock, &bufsize, sizeof(int), MSG_WAITALL) < 0) {
-        debug_perror("recv node list len");
+        DEBUG_PERROR("recv node list len");
         exit(1);
     }
     if (bufsize > 0) {
         buffer = (uint8_t *)malloc(bufsize);
         if (recv(connsock, buffer, bufsize, MSG_WAITALL) < 0) {
-            debug_perror("recv node list");
+            DEBUG_PERROR("recv node list");
             exit(1);
         }
         for (int offset = 0; offset <= bufsize - PACKED_NODE_SIZE; offset += PACKED_NODE_SIZE) {

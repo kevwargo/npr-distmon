@@ -9,7 +9,7 @@ struct dllist *dllist_create()
 {
     struct dllist *list = (struct dllist *)malloc(sizeof(struct dllist));
     if (! list) {
-        debug_perror("create dllist");
+        DEBUG_PERROR("create dllist");
         exit(1);
     }
     memset(list, 0, sizeof(struct dllist));

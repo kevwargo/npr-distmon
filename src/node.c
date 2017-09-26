@@ -10,7 +10,7 @@
 void fprint_nodes(FILE *f, struct dllist *list)
 {
     struct node *node;
-    debug_fprintf(f, "");
+    DEBUG_FPRINTF(f, "");
     dllist_foreach(node, list) {
         fprintf(f, "(%d %s:%d) ", node->id, inet_ntoa(node->saddr.sin_addr), ntohs(node->saddr.sin_port));
     }

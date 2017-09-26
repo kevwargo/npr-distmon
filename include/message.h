@@ -8,6 +8,7 @@
 #include "node.h"
 
 struct node;
+struct distenv;
 
 struct message {
     int sender_id;
