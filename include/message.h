@@ -40,7 +40,7 @@ struct message_handler {
 };
 
 extern int handle_message(struct distenv *distenv, struct node *node);
-extern int send_message(struct node *node, int type, int len, void *buf);
+extern size_t send_message(struct node *node, int type, int len, void *buf);
 extern void register_handler(struct distenv *distenv, message_callback_t handler, void *data);
 extern void unregister_handler(struct distenv *distenv, message_callback_t handler, int free_data);
 extern struct message *wait_for_message(struct distenv *distenv, message_callback_t matcher, void *data);

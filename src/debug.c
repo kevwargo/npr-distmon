@@ -6,6 +6,7 @@
 
 char __logprefix[256];
 int __errno_bak;
+double __start_time;
 
 
 void log_nodes(int signum)
@@ -33,6 +34,9 @@ void log_nodes(int signum)
 
 void init_log(struct cmdline_options *options)
 {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    __start_time = (double)ts.tv_sec + ((double)ts.tv_nsec / (double)(1000 * 1000 * 1000));
     snprintf(__logprefix, 256, "%s %s", options->bind_param, options->conn_param);
     if (options->stdout_file) {
         if (!freopen(options->stdout_file, "a+", stdout)) {

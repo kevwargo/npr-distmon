@@ -52,9 +52,15 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
     distenv->msg_buffer->queue = dllist_create();
     distenv->msg_buffer->handlers = dllist_create();
     distenv->msg_buffer->mutex = malloc(sizeof(pthread_mutex_t));
-    pthread_mutex_init(distenv->msg_buffer->mutex, NULL);
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(distenv->msg_buffer->mutex, &attr);
+    pthread_mutexattr_destroy(&attr);
     distenv->msg_buffer->cond = malloc(sizeof(pthread_cond_t));
     pthread_cond_init(distenv->msg_buffer->cond, NULL);
+
+    distlock_init(distenv);
 
     return distenv;
 }

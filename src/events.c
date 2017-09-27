@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -125,6 +126,9 @@ static char *str_revents(short revents)
 static void node_disconnect(struct dllist *list, struct node *node)
 {
     DEBUG_PRINTF("Node %d disconnected", node->id);
+    if (close(node->sfd) < 0) {
+        DEBUG_PERROR("Node %d close() failed", node->id);
+    }
     if (node->msg_part) {
         free(node->msg_part);
     }

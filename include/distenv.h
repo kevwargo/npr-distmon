@@ -4,6 +4,8 @@
 #include <poll.h>
 #include "dllist.h"
 #include "message.h"
+#include "distlock.h"
+
 
 struct distenv {
     int self_id;
@@ -12,6 +14,7 @@ struct distenv {
     struct dllist *node_list;
     struct pollfd *pfds;
     struct msg_buffer *msg_buffer;
+    struct distlock *lock;
 };
 
 extern struct distenv *distenv_init();

@@ -87,7 +87,7 @@ size_t sendall(int socket, void *buffer, size_t length)
     while (length > 0) {
         size_t chunksize = send(socket, buffer + total, length, 0);
         if (chunksize < 0) {
-            DEBUG_PERROR("sendall");
+            DEBUG_PERROR("send");
             return chunksize;
         }
         total += chunksize;

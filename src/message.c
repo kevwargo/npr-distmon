@@ -55,7 +55,12 @@ int handle_message(struct distenv *distenv, struct node *node)
             int handled = 0;
             struct message_handler *handler;
             dllist_foreach(handler, distenv->msg_buffer->handlers) {
-                if (handler->callback(distenv, node->msg_part, handler->data)) {
+                int ret = handler->callback(distenv, node->msg_part, handler->data);
+                if (ret < 0) {
+                    DEBUG_FPRINTF(stderr, "Error in message handler %p", handler->callback);
+                    pthread_mutex_unlock(distenv->msg_buffer->mutex);
+                    return -1;
+                } else if (ret > 0) {
                     handled = 1;
                     break;
                 }
@@ -75,9 +80,10 @@ int handle_message(struct distenv *distenv, struct node *node)
     return 0;
 }
 
-int send_message(struct node *node, int type, int len, void *buf)
+size_t send_message(struct node *node, int type, int len, void *buf)
 {
     if (len < 0) {
+        DEBUG_FPRINTF(stderr, "len is negative: %d", len);
         errno = EINVAL;
         return -1;
     }
@@ -88,23 +94,25 @@ int send_message(struct node *node, int type, int len, void *buf)
     if (len > 0) {
         memcpy(msg->data, buf, len);
     }
-    return sendall(node->sfd, msg, size);
+    size = sendall(node->sfd, msg, size);
+    free(msg);
+    return size;
 }
 
 void register_handler(struct distenv *distenv, message_callback_t callback, void *data)
 {
     pthread_mutex_lock(distenv->msg_buffer->mutex);
-    DEBUG_PRINTF("Looking for callback %p...", callback);
+    /* DEBUG_PRINTF("Looking for callback %p...", callback); */
     struct message_handler *handler;
     dllist_foreach(handler, distenv->msg_buffer->handlers) {
         if (handler->callback == callback) {
-            DEBUG_PRINTF("updating data for %p: %p", callback, data);
+            /* DEBUG_PRINTF("updating data for %p: %p", callback, data); */
             handler->data = data;
             pthread_mutex_unlock(distenv->msg_buffer->mutex);
             return;
         }
     }
-    DEBUG_PRINTF("adding new callback %p: %p", callback, data);
+    /* DEBUG_PRINTF("adding new callback %p: %p", callback, data); */
     struct message_handler new_handler;
     new_handler.callback = callback;
     new_handler.data = data;
@@ -115,7 +123,7 @@ void register_handler(struct distenv *distenv, message_callback_t callback, void
 void unregister_handler(struct distenv *distenv, message_callback_t callback, int free_data)
 {
     pthread_mutex_lock(distenv->msg_buffer->mutex);
-    DEBUG_PRINTF("Looking for callback %p (%sfreeing data)...", callback, (free_data ? "" : "not "));
+    /* DEBUG_PRINTF("Looking for callback %p (%sfreeing data)...", callback, (free_data ? "" : "not ")); */
     struct message_handler *handler;
     dllist_foreach(handler, distenv->msg_buffer->handlers) {
         if (handler->callback == callback) {
@@ -123,12 +131,13 @@ void unregister_handler(struct distenv *distenv, message_callback_t callback, in
                 DEBUG_PRINTF("freeing handler %p data %p...", callback, handler->data);
                 free(handler->data);
             }
+            /* DEBUG_PRINTF("Removing callback %p", callback); */
             dllist_delete(distenv->msg_buffer->handlers, handler);
             pthread_mutex_unlock(distenv->msg_buffer->mutex);
             return;
         }
     }
-    DEBUG_PRINTF("callback %p not found", callback);
+    /* DEBUG_PRINTF("callback %p not found", callback); */
     pthread_mutex_unlock(distenv->msg_buffer->mutex);
 }
 
@@ -141,7 +150,12 @@ struct message *wait_for_message(struct distenv *distenv, message_callback_t mat
     while (! found) {
         struct message *m;
         dllist_foreach(m, distenv->msg_buffer->queue) {
-            if (matcher(distenv, m, data)) {
+            int ret = matcher(distenv, m, data);
+            if (ret < 0) {
+                DEBUG_FPRINTF(stderr, "Message matcher %p failed", matcher);
+                pthread_mutex_unlock(distenv->msg_buffer->mutex);
+                return NULL;
+            } else if (ret > 0) {
                 found = 1;
             }
         }
