@@ -42,7 +42,7 @@ int distmon_start(int argc, char **argv, pthread_t *thread)
         return -1;
     }
 
-    DEBUG_PRINTF("self.id = %d", global_distenv->self_id);
+    DEBUG_PRINTF("Discovered id: %d", global_distenv->self_id);
     print_nodes(global_distenv->node_list);
 
     struct sigaction sa;

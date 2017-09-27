@@ -67,15 +67,11 @@ static int distenv_connect(struct distenv *distenv, struct sockaddr_in *conn_add
         DEBUG_PERROR("getsockname");
         return -1;
     }
-    DEBUG_PRINTF("bind_addr: (len %d)", addrlen);
-    hexdump(&bind_addr, addrlen);
 
     struct packed_node self;
     self.id = discover_id(conn_addr, distenv->node_list);
     self.ip = bind_addr.sin_addr.s_addr;
     self.port = bind_addr.sin_port;
-    DEBUG_PRINTF("self: ");
-    hexdump(&self, sizeof(struct packed_node));
 
     struct node *node;
     dllist_foreach(node, distenv->node_list) {

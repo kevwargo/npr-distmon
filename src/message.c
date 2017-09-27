@@ -23,7 +23,7 @@ int handle_message(struct distenv *distenv, struct node *node)
             if (ret < 0) {
                 DEBUG_PERROR("recv message header from a node");
             } else {
-                DEBUG_FPRINTF(stderr, "Node %d disconnected while receiving message", node->id);
+                DEBUG_PRINTF("Node %d disconnected while receiving message", node->id);
             }
             return -1;
         }
@@ -45,7 +45,7 @@ int handle_message(struct distenv *distenv, struct node *node)
             return -1;
         }
     } else if (received == 0 && remaining > 0) {
-        DEBUG_FPRINTF(stderr, "Node %d disconnected while receiving message", node->id);
+        DEBUG_PRINTF("Node %d disconnected while receiving message", node->id);
         return -1;
     } else {
         node->msg_part->received += received;
