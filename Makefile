@@ -11,6 +11,8 @@ SOURCES+=src/message.c
 SOURCES+=src/dllist.c
 SOURCES+=src/distenv.c
 SOURCES+=src/debug.c
+SOURCES+=src/cmdline.c
+SOURCES+=src/main.c
 
 HEADERS=include/node.h
 HEADERS+=include/socket.h
@@ -18,6 +20,8 @@ HEADERS+=include/events.h
 HEADERS+=include/message.h
 HEADERS+=include/dllist.h
 HEADERS+=include/debug.h
+HEADERS+=include/distmon.h
+HEADERS+=include/cmdline.h
 
 
 define SourcesToObjects =

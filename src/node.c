@@ -36,20 +36,20 @@ void print_nodes(struct dllist *list)
     fprint_nodes(stdout, list);
 }
 
-int contains(struct dllist *list, int id)
+struct node *find_node(struct dllist *list, int id)
 {
     struct node *node;
     dllist_foreach(node, list) {
         if (node->id == id) {
-            return 1;
+            return node;
         }
     }
-    return 0;
+    return NULL;
 }
 
 struct node *add_node(struct dllist *list, struct node *node)
 {
-    if (! contains(list, node->id)) {
+    if (! find_node(list, node->id)) {
         return dllist_add(list, node);
     }
     return NULL;

@@ -11,7 +11,7 @@ struct node;
 struct distenv;
 struct message;
 
-typedef int (*message_handler_t)(struct distenv *distenv, struct message *message);
+typedef int (*message_callback_t)(struct distenv *distenv, struct message *message, void *data);
 
 struct __attribute__((packed)) message_header {
     int type;
@@ -20,7 +20,7 @@ struct __attribute__((packed)) message_header {
 };
 
 struct message {
-    int sender_id;
+    struct node *sender;
     int type;
     int len;
     int received;
@@ -28,16 +28,22 @@ struct message {
 };
 
 struct msg_buffer {
-    struct dllist *list;
+    struct dllist *queue;
     pthread_mutex_t *mutex;
     pthread_cond_t *cond;
     struct dllist *handlers;
 };
 
+struct message_handler {
+    message_callback_t callback;
+    void *data;
+};
+
 extern int handle_message(struct distenv *distenv, struct node *node);
 extern int send_message(struct node *node, int type, int len, void *buf);
-extern void register_handler(struct distenv *distenv, message_handler_t handler);
-extern void unregister_handler(struct distenv *distenv, message_handler_t handler);
+extern void register_handler(struct distenv *distenv, message_callback_t handler, void *data);
+extern void unregister_handler(struct distenv *distenv, message_callback_t handler, int free_data);
+extern struct message *wait_for_message(struct distenv *distenv, message_callback_t matcher, void *data);
 
 
 #endif

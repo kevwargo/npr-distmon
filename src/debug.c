@@ -2,9 +2,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "debug.h"
+#include "distmon.h"
 
-int __argc_;
-char **__argv_;
+char __logprefix[256];
 int __errno_bak;
 
 
@@ -31,10 +31,19 @@ void log_nodes(int signum)
     fclose(logfile);
 }
 
-void init_log(int argc, char **argv)
+void init_log(struct cmdline_options *options)
 {
-    __argc_ = argc;
-    __argv_ = argv;
+    snprintf(__logprefix, 256, "%s %s", options->bind_param, options->conn_param);
+    if (options->stdout_file) {
+        if (!freopen(options->stdout_file, "a+", stdout)) {
+            DEBUG_FPRINTF(stderr, "Failed to set stdout to file %s", options->stdout_file);
+        }
+    }
+    if (options->stderr_file) {
+        if (!freopen(options->stderr_file, "a+", stderr)) {
+            DEBUG_FPRINTF(stderr, "Failed to set stderr to file %s", options->stderr_file);
+        }
+    }
 }
 
 void hexdump(void *voidbuf, int length)

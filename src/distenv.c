@@ -49,7 +49,7 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
     }
 
     distenv->msg_buffer = (struct msg_buffer *)malloc(sizeof(struct msg_buffer));
-    distenv->msg_buffer->list = dllist_create();
+    distenv->msg_buffer->queue = dllist_create();
     distenv->msg_buffer->handlers = dllist_create();
     distenv->msg_buffer->mutex = malloc(sizeof(pthread_mutex_t));
     pthread_mutex_init(distenv->msg_buffer->mutex, NULL);
@@ -98,7 +98,7 @@ static int discover_id(struct sockaddr_in *conn_addr, struct dllist *node_list)
         DEBUG_PERROR("recv node id");
         exit(1);
     }
-    if (! contains(node_list, node_id)) {
+    if (! find_node(node_list, node_id)) {
         struct node node;
         memset(&node, 0, sizeof(struct node));
         node.id = node_id;
@@ -121,7 +121,7 @@ static int discover_id(struct sockaddr_in *conn_addr, struct dllist *node_list)
             exit(1);
         }
         for (int i = 0; i < nodes_count; i++) {
-            if (! contains(node_list, nodes_buf[i].id)) {
+            if (! find_node(node_list, nodes_buf[i].id)) {
                 struct sockaddr_in saddr;
                 memset(&saddr, 0, sizeof(struct sockaddr_in));
                 saddr.sin_family = AF_INET;

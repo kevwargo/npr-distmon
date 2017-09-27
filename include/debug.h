@@ -1,12 +1,15 @@
+#ifndef _DEBUG_H_INCLUDED_
+#define _DEBUG_H_INCLUDED_
+
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
 #include "distenv.h"
+#include "cmdline.h"
 
-#define DEBUG_FPRINTF(stream, format, ...)                              \
-    for (int __i = 1; __i < __argc_ - 1; __i++) fprintf(stream, "%s ", __argv_[__i]); \
-    if (__argc_ > 1) fprintf(stream, "%s: ", __argv_[__argc_ - 1]); \
-    fprintf(stream, format " (%s:%d)\n", ##__VA_ARGS__, __FILE__, __LINE__)
+#define DEBUG_FPRINTF(stream, format, ...) \
+    fprintf(stream, "%s (in %s): " format " (%s:%d)\n", __logprefix, __PRETTY_FUNCTION__, ##__VA_ARGS__, __FILE__, __LINE__); \
+    fflush(stream)
 
 #define DEBUG_PRINTF(format, ...) DEBUG_FPRINTF(stdout, format, ##__VA_ARGS__)
 
@@ -15,11 +18,11 @@
     DEBUG_FPRINTF(stderr, "%s: %s (%s:%d)", msg, strerror(__errno_bak), __FILE__, __LINE__)
 
 
-extern int __argc_;
-extern char **__argv_;
+extern char __logprefix[];
 extern int __errno_bak;
-extern struct distenv *global_distenv;
 
-extern void init_log(int argc, char **argv);
+extern void init_log(struct cmdline_options *options);
 extern void log_nodes(int signum);
-extern void hexdump(void *, int);
+extern void hexdump(void *voidbuf, int length);
+
+#endif

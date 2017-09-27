@@ -24,7 +24,7 @@ struct __attribute__((packed)) packed_node {
 
 
 extern struct node *add_node(struct dllist *list, struct node *node);
-extern int contains(struct dllist *list, int id);
+extern struct node *find_node(struct dllist *list, int id);
 extern void print_nodes(struct dllist *list);
 extern void fprint_nodes(FILE *f, struct dllist *list);
 extern void delete_node_id(struct dllist *list, int id);

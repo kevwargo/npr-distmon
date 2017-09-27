@@ -29,7 +29,7 @@ int handle_message(struct distenv *distenv, struct node *node)
         }
         node->msg_part = (struct message *)malloc(sizeof(struct message) + header.len);
         memset(node->msg_part, 0, sizeof(struct message) + header.len);
-        node->msg_part->sender_id = node->id;
+        node->msg_part->sender = node;
         node->msg_part->type = header.type;
         node->msg_part->len = header.len;
         node->msg_part->received = 0;
@@ -53,16 +53,16 @@ int handle_message(struct distenv *distenv, struct node *node)
             pthread_mutex_lock(distenv->msg_buffer->mutex);
 
             int handled = 0;
-            message_handler_t *h;
-            dllist_foreach(h, distenv->msg_buffer->handlers) {
-                if ((*h)(distenv, node->msg_part)) {
+            struct message_handler *handler;
+            dllist_foreach(handler, distenv->msg_buffer->handlers) {
+                if (handler->callback(distenv, node->msg_part, handler->data)) {
                     handled = 1;
                     break;
                 }
             }
 
             if (! handled) {
-                dllist_add(distenv->msg_buffer->list, node->msg_part);
+                dllist_add(distenv->msg_buffer->queue, node->msg_part);
                 pthread_cond_broadcast(distenv->msg_buffer->cond);
             }
             free(node->msg_part);
@@ -91,30 +91,69 @@ int send_message(struct node *node, int type, int len, void *buf)
     return sendall(node->sfd, msg, size);
 }
 
-void register_handler(struct distenv *distenv, message_handler_t handler)
+void register_handler(struct distenv *distenv, message_callback_t callback, void *data)
 {
     pthread_mutex_lock(distenv->msg_buffer->mutex);
-    message_handler_t *h;
-    dllist_foreach(h, distenv->msg_buffer->handlers) {
-        if (*h == handler) {
+    DEBUG_PRINTF("Looking for callback %p...", callback);
+    struct message_handler *handler;
+    dllist_foreach(handler, distenv->msg_buffer->handlers) {
+        if (handler->callback == callback) {
+            DEBUG_PRINTF("updating data for %p: %p", callback, data);
+            handler->data = data;
             pthread_mutex_unlock(distenv->msg_buffer->mutex);
             return;
         }
     }
-    dllist_add(distenv->msg_buffer->handlers, &handler);
+    DEBUG_PRINTF("adding new callback %p: %p", callback, data);
+    struct message_handler new_handler;
+    new_handler.callback = callback;
+    new_handler.data = data;
+    dllist_add(distenv->msg_buffer->handlers, &new_handler);
     pthread_mutex_unlock(distenv->msg_buffer->mutex);
 }
 
-void unregister_handler(struct distenv *distenv, message_handler_t handler)
+void unregister_handler(struct distenv *distenv, message_callback_t callback, int free_data)
 {
     pthread_mutex_lock(distenv->msg_buffer->mutex);
-    message_handler_t *h;
-    dllist_foreach(h, distenv->msg_buffer->handlers) {
-        if (*h == handler) {
-            dllist_delete(distenv->msg_buffer->handlers, h);
+    DEBUG_PRINTF("Looking for callback %p (%sfreeing data)...", callback, (free_data ? "" : "not "));
+    struct message_handler *handler;
+    dllist_foreach(handler, distenv->msg_buffer->handlers) {
+        if (handler->callback == callback) {
+            if (free_data && handler->data) {
+                DEBUG_PRINTF("freeing handler %p data %p...", callback, handler->data);
+                free(handler->data);
+            }
+            dllist_delete(distenv->msg_buffer->handlers, handler);
             pthread_mutex_unlock(distenv->msg_buffer->mutex);
             return;
         }
     }
+    DEBUG_PRINTF("callback %p not found", callback);
     pthread_mutex_unlock(distenv->msg_buffer->mutex);
+}
+
+struct message *wait_for_message(struct distenv *distenv, message_callback_t matcher, void *data)
+{
+    struct message *message;
+    int found = 0;
+
+    pthread_mutex_lock(distenv->msg_buffer->mutex);
+    while (! found) {
+        struct message *m;
+        dllist_foreach(m, distenv->msg_buffer->queue) {
+            if (matcher(distenv, m, data)) {
+                found = 1;
+            }
+        }
+        if (! found) {
+            pthread_cond_wait(distenv->msg_buffer->cond, distenv->msg_buffer->mutex);
+            continue;
+        }
+        message = (struct message *)malloc(sizeof(struct message));
+        memcpy(message, m, sizeof(struct message));
+        dllist_delete(distenv->msg_buffer->queue, m);
+    }
+    
+    pthread_mutex_unlock(distenv->msg_buffer->mutex);
+    return message;
 }
