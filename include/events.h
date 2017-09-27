@@ -5,7 +5,7 @@
 #include "node.h"
 #include "dllist.h"
 
-extern void event_loop(struct distenv *distenv);
+extern void *event_loop(struct distenv *distenv);
 extern void node_disconnect(struct dllist *list, struct node *node);
 
 #endif

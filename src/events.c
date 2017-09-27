@@ -127,10 +127,13 @@ char *str_revents(short revents)
 void node_disconnect(struct dllist *list, struct node *node)
 {
     DEBUG_FPRINTF(stderr, "Node %d disconnected", node->id);
+    if (node->msg_part) {
+        free(node->msg_part);
+    }
     dllist_delete(list, node);
 }
  
-void event_loop(struct distenv *distenv)
+void *event_loop(struct distenv *distenv)
 {
     int nfds = refresh_pollfds(distenv);
     while (1) {
@@ -179,4 +182,5 @@ void event_loop(struct distenv *distenv)
             nfds = refresh_pollfds(distenv);
         }
     }
+    return NULL;
 }

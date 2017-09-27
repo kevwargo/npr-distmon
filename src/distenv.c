@@ -32,7 +32,6 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
     distenv->self_id = 1;
     distenv->self_sock = socket_initbind(&bind_addr);
     distenv->node_list = dllist_create();
-    distenv->msg_buffer = (struct msg_buffer *)malloc(sizeof(struct msg_buffer));
 
     if (conn_param) {
         struct sockaddr_in conn_addr;
@@ -49,7 +48,9 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
         DEBUG_PRINTF("Connected to %s", conn_param);
     }
 
+    distenv->msg_buffer = (struct msg_buffer *)malloc(sizeof(struct msg_buffer));
     distenv->msg_buffer->list = dllist_create();
+    distenv->msg_buffer->handlers = dllist_create();
     distenv->msg_buffer->mutex = malloc(sizeof(pthread_mutex_t));
     pthread_mutex_init(distenv->msg_buffer->mutex, NULL);
     distenv->msg_buffer->cond = malloc(sizeof(pthread_cond_t));
