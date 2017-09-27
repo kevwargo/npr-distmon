@@ -95,6 +95,7 @@ int distlock_lock(struct distenv *distenv)
                 dlmsg_p->timestamp = distenv->lock->timestamp;
                 if (send_message(message->sender, DISTLOCK_REPLY, sizeof(struct distlock_msg), dlmsg_p) < 0) {
                     DEBUG_FPRINTF(stderr, "Error while sending reply to higher priority requesting node %d", message->sender->id);
+                    free(message);
                     return -1;
                 }
                 DEBUG_PRINTF("Sent REPLY to higher priority node %d", message->sender->id);
@@ -103,6 +104,7 @@ int distlock_lock(struct distenv *distenv)
                 dllist_add(distenv->lock->deferred, message);
             }
         }
+        free(message);
     }
     DEBUG_PRINTF("Successfully entered CS");
     register_handler(distenv, cs_defer_requests, NULL);
