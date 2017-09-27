@@ -11,6 +11,7 @@
 #include "dllist.h"
 #include "distenv.h"
 #include "message.h"
+#include "socket.h"
 #include "debug.h"
 
 
@@ -20,7 +21,7 @@ int refresh_pollfds(struct distenv *distenv)
     if (distenv->pfds) {
         free(distenv->pfds);
     }
-    distenv->pfds = calloc(size, sizeof(struct pollfd));
+    distenv->pfds = (struct pollfd *)calloc(size, sizeof(struct pollfd));
     distenv->pfds[0].fd = distenv->self_sock;
     distenv->pfds[0].events = POLLIN;
     DEBUG_PRINTF("POLL: Registering serv_sock");
@@ -50,20 +51,16 @@ void accept_node(struct distenv *distenv)
         DEBUG_PERROR("send self node id");
         exit(1);
     }
-    int bufsize = distenv->node_list->size * PACKED_NODE_SIZE;
-    if (send(cfd, &bufsize, sizeof(int), 0) < 0) {
+    int nodes_count = distenv->node_list->size;
+    if (send(cfd, &nodes_count, sizeof(int), 0) < 0) {
         DEBUG_PERROR("send node list len");
         exit(1);
     }
-    DEBUG_PRINTF("sent node_list bufsize: %d", bufsize);
+    DEBUG_PRINTF("sent nodes_count: %d", nodes_count);
+    int bufsize = nodes_count * sizeof(struct packed_node);
     if (bufsize > 0) {
         uint8_t *buffer = pack_nodes(distenv->node_list);
-        int sent = send(cfd, buffer, bufsize, 0);
-        /* TODO */
-        if (sent < bufsize) {
-            DEBUG_FPRINTF(stderr, "SENT LESS THAN BUFSIZE!!!");
-            exit(2);
-        }
+        int sent = sendall(cfd, buffer, bufsize);
         if (sent < 0) {
             DEBUG_PERROR("send node list");
             exit(1);
@@ -72,7 +69,7 @@ void accept_node(struct distenv *distenv)
     }
 
     struct packed_node n;
-    if (recv(cfd, &n, PACKED_NODE_SIZE, MSG_WAITALL) < 0) {
+    if (recv(cfd, &n, sizeof(struct packed_node), MSG_WAITALL) < 0) {
         DEBUG_PERROR("recv node info");
         exit(1);
     }
@@ -147,24 +144,24 @@ void event_loop(struct distenv *distenv)
             exit(1);
         }
         DEBUG_PRINTF("poll returned %d: ", selected);
-        char *str = str_revents(distenv->pfds[0].revents);
-        if (str) {
-            printf("s: %s; ", str);
-            free(str);
-        }
+        /* char *str = str_revents(distenv->pfds[0].revents); */
+        /* if (str) { */
+        /*     printf("s: %s; ", str); */
+        /*     free(str); */
+        /* } */
         struct node *node;
-        dllist_foreach(node, distenv->node_list) {
-            char *str = str_revents(node->pfd->revents);
-            if (str) {
-                printf("%d: %s; ", node->id, str);
-                free(str);
-            }
-        }
-        printf("\n");
+        /* dllist_foreach(node, distenv->node_list) { */
+        /*     char *str = str_revents(node->pfd->revents); */
+        /*     if (str) { */
+        /*         printf("%d: %s; ", node->id, str); */
+        /*         free(str); */
+        /*     } */
+        /* } */
+        /* printf("\n"); */
         dllist_foreach(node, distenv->node_list) {
             DEBUG_PRINTF("node: %p", node);
             DEBUG_PRINTF("node->pfd: %p", node->pfd);
-            str = str_revents(node->pfd->revents);
+            char *str = str_revents(node->pfd->revents);
             if (str) {
                 DEBUG_PRINTF("node %d revents: %s", node->id, str);
                 free(str);

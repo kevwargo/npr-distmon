@@ -39,7 +39,7 @@ obj:
 	mkdir -p obj
 
 distmon: $(call SourcesToObjects, $(SOURCES))
-	$(LD) $(LDFLAGS) -o $@ $^ ../../../libhexdump.o
+	$(LD) $(LDFLAGS) -o $@ $^
 clean:
 	rm -rf obj distmon
 

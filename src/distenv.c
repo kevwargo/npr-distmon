@@ -11,7 +11,7 @@
 #include "debug.h"
 
 static int distenv_connect(struct distenv *distenv, struct sockaddr_in *conn_addr);
-static int propagate(struct sockaddr_in *conn_addr, struct dllist *node_list);
+static int discover_id(struct sockaddr_in *conn_addr, struct dllist *node_list);
 
 
 struct distenv *distenv_init(char *bind_param, char *conn_param)
@@ -61,25 +61,24 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
 static int distenv_connect(struct distenv *distenv, struct sockaddr_in *conn_addr)
 {
     struct sockaddr_in bind_addr;
-    socklen_t addrlen;
+    socklen_t addrlen = sizeof(struct sockaddr_in);
     if (getsockname(distenv->self_sock, (struct sockaddr *)&bind_addr, &addrlen) < 0) {
         DEBUG_PERROR("getsockname");
         return -1;
     }
-    DEBUG_PRINTF("bind_addr: ");
-    hexdump(&bind_addr, sizeof(struct sockaddr_in));
+    DEBUG_PRINTF("bind_addr: (len %d)", addrlen);
+    hexdump(&bind_addr, addrlen);
 
     struct packed_node self;
-    self.id = propagate(conn_addr, distenv->node_list);
+    self.id = discover_id(conn_addr, distenv->node_list);
     self.ip = bind_addr.sin_addr.s_addr;
     self.port = bind_addr.sin_port;
     DEBUG_PRINTF("self: ");
-    hexdump(&self, sizeof(struct sockaddr_in));
-
+    hexdump(&self, sizeof(struct packed_node));
 
     struct node *node;
     dllist_foreach(node, distenv->node_list) {
-        if (send(node->sfd, &self, PACKED_NODE_SIZE, 0) < 0) {
+        if (send(node->sfd, &self, sizeof(struct packed_node), 0) < 0) {
             DEBUG_PERROR("send self node info");
             return -1;
         }
@@ -90,7 +89,7 @@ static int distenv_connect(struct distenv *distenv, struct sockaddr_in *conn_add
     return 0;
 }
 
-static int propagate(struct sockaddr_in *conn_addr, struct dllist *node_list)
+static int discover_id(struct sockaddr_in *conn_addr, struct dllist *node_list)
 {
     int connsock = socket_initconn(conn_addr);
     int node_id;
@@ -108,32 +107,32 @@ static int propagate(struct sockaddr_in *conn_addr, struct dllist *node_list)
     }
 
     int id = node_id + 1;
-    int bufsize;
-    uint8_t *buffer;
-    if (recv(connsock, &bufsize, sizeof(int), MSG_WAITALL) < 0) {
+    int nodes_count;
+    if (recv(connsock, &nodes_count, sizeof(int), MSG_WAITALL) < 0) {
         DEBUG_PERROR("recv node list len");
         exit(1);
     }
-    if (bufsize > 0) {
-        buffer = (uint8_t *)malloc(bufsize);
-        if (recv(connsock, buffer, bufsize, MSG_WAITALL) < 0) {
+    if (nodes_count > 0) {
+        int bufsize = nodes_count * sizeof(struct packed_node);
+        struct packed_node *nodes_buf = (struct packed_node *)malloc(bufsize);
+        if (recv(connsock, nodes_buf, bufsize, MSG_WAITALL) < 0) {
             DEBUG_PERROR("recv node list");
             exit(1);
         }
-        for (int offset = 0; offset <= bufsize - PACKED_NODE_SIZE; offset += PACKED_NODE_SIZE) {
-            struct packed_node *node = (struct packed_node *)(buffer + offset);
-            if (! contains(node_list, node->id)) {
+        for (int i = 0; i < nodes_count; i++) {
+            if (! contains(node_list, nodes_buf[i].id)) {
                 struct sockaddr_in saddr;
+                memset(&saddr, 0, sizeof(struct sockaddr_in));
                 saddr.sin_family = AF_INET;
-                saddr.sin_addr.s_addr = node->ip;
-                saddr.sin_port = node->port;
-                int temp_id = propagate(&saddr, node_list);
+                saddr.sin_addr.s_addr = nodes_buf[i].ip;
+                saddr.sin_port = nodes_buf[i].port;
+                int temp_id = discover_id(&saddr, node_list);
                 if (temp_id > id) {
                     id = temp_id;
                 }
             }
         }
-        free(buffer);
+        free(nodes_buf);
     }
 
     return id;

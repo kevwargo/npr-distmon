@@ -46,7 +46,7 @@ int distmond(int argc, char **argv)
     init_log(argc, argv);
     global_distenv = distenv_init(argc > 1 ? argv[1] : NULL, argc > 2 ? argv[2] : NULL);
     if (! global_distenv) {
-        DEBUG_FPRINTF(stderr, "Usage: %s bind_host:bind_port [connect_host:connect_port]\n", argv[0]);
+        DEBUG_FPRINTF(stderr, "Usage: %s [bind_host:]bind_port [[connect_host:]connect_port]\n", argv[0]);
         return 1;
     }
 
@@ -70,7 +70,7 @@ int distmond(int argc, char **argv)
 
 void watcher_term(int signum)
 {
-    printf("distmon daemon is running in background\n");
+    DEBUG_PRINTF("distmon daemon is running in background");
     exit(0);
 }
 

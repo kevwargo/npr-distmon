@@ -5,6 +5,7 @@
 
 int __argc_;
 char **__argv_;
+int __errno_bak;
 
 
 void log_nodes(int signum)
@@ -34,4 +35,23 @@ void init_log(int argc, char **argv)
 {
     __argc_ = argc;
     __argv_ = argv;
+}
+
+void hexdump(void *voidbuf, int length)
+{
+    unsigned char *buf = (unsigned char *)voidbuf;
+    for (int i = 0; i < length; i++)
+    {
+        printf("%.2x", buf[i]);
+        if (! (~i & 0x1f))
+        {
+            putchar('\n');
+            continue;
+        }
+        else if (! (~i & 0x07))
+            putchar(' ');
+        if (i < length - 1)
+            putchar(' ');
+    }
+    putchar('\n');
 }

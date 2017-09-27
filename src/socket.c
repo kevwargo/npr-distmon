@@ -50,24 +50,28 @@ int socket_initconn(struct sockaddr_in *saddr)
 
 int socket_parseaddr(const char *s, struct sockaddr_in *saddr)
 {
-    char *ip = strdup(s);
-    if (! ip) {
+    char *addr = strdup(s);
+    if (! addr) {
         DEBUG_PERROR("strdup");
         return -1;
     }
-    char *port = strchr(ip, ':');
+    char *ip;
+    char *port = strchr(addr, ':');
     if (! port) {
-        DEBUG_FPRINTF(stderr, "Socket address must be of format HOST:PORT");
-        return -1;
+        ip = "localhost";
+        port = addr;
+    } else {
+        ip = addr;
+        *port = '\0';
+        port++;
     }
-    *port = '\0';
-    port++;
 
     struct addrinfo hints;
     struct addrinfo *ai = NULL;
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET;
     int ret = getaddrinfo(ip, port, &hints, &ai);
+    free(addr);
     if (ret != 0) {
         DEBUG_FPRINTF(stderr, "getaddrinfo error: %s", gai_strerror(ret));
         return -1;
@@ -75,4 +79,19 @@ int socket_parseaddr(const char *s, struct sockaddr_in *saddr)
     memcpy(saddr, ai->ai_addr, sizeof(struct sockaddr_in));
     freeaddrinfo(ai);
     return 0;
+}
+
+size_t sendall(int socket, void *buffer, size_t length)
+{
+    size_t total = 0;
+    while (length > 0) {
+        size_t chunksize = send(socket, buffer + total, length, 0);
+        if (chunksize < 0) {
+            DEBUG_PERROR("sendall");
+            return chunksize;
+        }
+        total += chunksize;
+        length -= chunksize;
+    }
+    return total;
 }

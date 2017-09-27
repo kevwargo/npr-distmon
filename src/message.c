@@ -50,7 +50,7 @@ int handle_message(struct distenv *distenv, struct node *node)
             dllist_delete(distenv->msg_buffer->list, message);
             goto _handle_message_error;
         }
-    } else if (received == 0) {
+    } else if (received == 0 && remaining > 0) {
         DEBUG_FPRINTF(stderr, "Node %d disconnected while receiving message", node->id);
         goto _handle_message_error;
     } else {

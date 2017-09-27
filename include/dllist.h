@@ -14,7 +14,7 @@ struct dllist {
 };
 
 #define dllist_add(list, item) \
-    __dllist_add(list, item, sizeof(*item))
+    __dllist_add(list, item, sizeof(*(item)))
 #define dllist_entry(item) \
     (struct dll_entry *)((char *)item - sizeof(struct dll_entry))
 

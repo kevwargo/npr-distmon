@@ -11,12 +11,15 @@
 #define DEBUG_PRINTF(format, ...) DEBUG_FPRINTF(stdout, format, ##__VA_ARGS__)
 
 #define DEBUG_PERROR(msg) \
-    DEBUG_FPRINTF(stderr, "%s: %s (%s:%d)", msg, strerror(errno), __FILE__, __LINE__)
+    __errno_bak = errno; \
+    DEBUG_FPRINTF(stderr, "%s: %s (%s:%d)", msg, strerror(__errno_bak), __FILE__, __LINE__)
 
 
 extern int __argc_;
 extern char **__argv_;
+extern int __errno_bak;
 extern struct distenv *global_distenv;
 
 extern void init_log(int argc, char **argv);
 extern void log_nodes(int signum);
+extern void hexdump(void *, int);

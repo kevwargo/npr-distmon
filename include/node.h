@@ -7,10 +7,6 @@
 #include "dllist.h"
 #include "message.h"
 
-#define PACKED_NODE_ID_SIZE (sizeof(int))
-#define PACKED_NODE_IP_SIZE (sizeof(uint32_t))
-#define PACKED_NODE_PORT_SIZE (sizeof(in_port_t))
-#define PACKED_NODE_SIZE (PACKED_NODE_ID_SIZE + PACKED_NODE_IP_SIZE + PACKED_NODE_PORT_SIZE)
 
 struct node {
     int id;
@@ -20,7 +16,7 @@ struct node {
     struct message *msg_part;
 };
 
-struct packed_node {
+struct __attribute__((packed)) packed_node {
     int id;
     uint32_t ip;
     in_port_t port;
