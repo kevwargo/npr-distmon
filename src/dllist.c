@@ -16,16 +16,24 @@ struct dllist *dllist_create()
     return list;
 }
 
-void *__dllist_add(struct dllist *list, void *item, size_t size)
+void *dllist_new(struct dllist *list, void *item, size_t size, int prepend)
 {
     struct dll_entry *new = malloc(size + sizeof(struct dll_entry));
     if (item) {
         memcpy((void *)new->item, item, size);
     }
-    new->next = NULL;
-    new->prev = list->tail;
+    if (prepend) {
+        new->prev = NULL;
+        new->next = list->head;
+    } else {
+        new->next = NULL;
+        new->prev = list->tail;
+    }
     if (list->size == 0) {
         list->head = list->tail = new;
+    } else if (prepend) {
+        list->head->prev = new;
+        list->head = new;
     } else {
         list->tail->next = new;
         list->tail = new;
@@ -34,7 +42,7 @@ void *__dllist_add(struct dllist *list, void *item, size_t size)
     return (void *)new->item;
 }
 
-void dllist_delete(struct dllist *list, void *item)
+void dllist_remove(struct dllist *list, void *item)
 {
     struct dll_entry *entry = dllist_entry(item);
     if (list->head == entry) {
@@ -56,6 +64,12 @@ void dllist_delete(struct dllist *list, void *item)
 void dllist_clear(struct dllist *list)
 {
     while (list->head) {
-        dllist_delete(list, (void *)list->head->item);
+        dllist_remove(list, (void *)list->head->item);
     }
+}
+
+void dllist_destroy(struct dllist *list)
+{
+    dllist_clear(list);
+    free(list);
 }

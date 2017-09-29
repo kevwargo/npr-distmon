@@ -50,7 +50,7 @@ struct node *find_node(struct dllist *list, int id)
 struct node *add_node(struct dllist *list, struct node *node)
 {
     if (! find_node(list, node->id)) {
-        return dllist_add(list, node);
+        return dllist_append(list, node);
     }
     return NULL;
 }
@@ -60,7 +60,7 @@ void delete_node_by_id(struct dllist *list, int id)
     struct node *node;
     dllist_foreach(node, list) {
         if (node->id == id) {
-            dllist_delete(list, node);
+            dllist_remove(list, node);
             return;
         }
     }

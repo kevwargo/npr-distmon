@@ -30,6 +30,6 @@ extern double __start_time;
 
 extern void init_log(struct cmdline_options *options);
 extern void log_nodes(int signum);
-extern void hexdump(void *voidbuf, int length);
+extern char *hexdump(void *voidbuf, int length);
 
 #endif

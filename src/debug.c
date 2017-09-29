@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -19,7 +21,7 @@ void log_nodes(int signum)
         return;
     }
     struct sockaddr_in bind_addr;
-    socklen_t addrlen;
+    socklen_t addrlen = sizeof(struct sockaddr_in);
     if (getsockname(global_distenv->self_sock, (struct sockaddr *)&bind_addr, &addrlen) < 0) {
         DEBUG_PERROR("getsockname");
         return;
@@ -50,21 +52,28 @@ void init_log(struct cmdline_options *options)
     }
 }
 
-void hexdump(void *voidbuf, int length)
+char *hexdump(void *voidbuf, int length)
 {
-    unsigned char *buf = (unsigned char *)voidbuf;
-    for (int i = 0; i < length; i++)
-    {
-        printf("%.2x", buf[i]);
-        if (! (~i & 0x1f))
-        {
-            putchar('\n');
-            continue;
-        }
-        else if (! (~i & 0x07))
-            putchar(' ');
-        if (i < length - 1)
-            putchar(' ');
+    if (length <= 0) {
+        return NULL;
     }
-    putchar('\n');
+    int hexsize = (length + (length >> 4)) * 3;
+    char *hex = (char *)malloc(hexsize);
+    char *hex_ptr = hex;
+    unsigned char *buf = (unsigned char *)voidbuf;
+    for (int i = 0; i < length; i++) {
+        hex_ptr += sprintf(hex_ptr, "%.2x", buf[i]);
+        if (! (~i & 0x0f)) {
+            hex_ptr += sprintf(hex_ptr, "\n");
+        } else {
+            if (! (~i & 0x07)) {
+                hex_ptr += sprintf(hex_ptr, " ");
+            }
+            if (i < length - 1) {
+                hex_ptr += sprintf(hex_ptr, " ");
+            }
+        }
+    }
+    hex_ptr += sprintf(hex_ptr, "\n");
+    return hex;
 }

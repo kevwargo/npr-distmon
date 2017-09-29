@@ -55,7 +55,7 @@ static void accept_node(struct distenv *distenv)
         DEBUG_PERROR("send node list len");
         exit(1);
     }
-    DEBUG_PRINTF("sent nodes_count: %d", nodes_count);
+    /* DEBUG_PRINTF("sent nodes_count: %d", nodes_count); */
     int bufsize = nodes_count * sizeof(struct packed_node);
     if (bufsize > 0) {
         uint8_t *buffer = pack_nodes(distenv->node_list);
@@ -132,7 +132,7 @@ static void node_disconnect(struct dllist *list, struct node *node)
     if (node->msg_part) {
         free(node->msg_part);
     }
-    dllist_delete(list, node);
+    dllist_remove(list, node);
 }
  
 void *event_loop(struct distenv *distenv)
@@ -152,8 +152,10 @@ void *event_loop(struct distenv *distenv)
         struct node *node;
         dllist_foreach(node, distenv->node_list) {
             str = str_revents(node->pfd->revents);
-            DEBUG_PRINTF("Node %d revents: %s", node->id, str);
-            free(str);
+            if (str) {
+                /* DEBUG_PRINTF("Node %d revents: %s", node->id, str); */
+                free(str);
+            }
             if (node->pfd->revents & POLLIN) {
                 if (handle_message(distenv, node) < 0) {
                     node_disconnect(distenv->node_list, node);
@@ -162,8 +164,10 @@ void *event_loop(struct distenv *distenv)
             }
         }
         str = str_revents(distenv->pfds[0].revents);
-        DEBUG_PRINTF("Server revents: %s", str);
-        free(str);
+        if (str) {
+            /* DEBUG_PRINTF("Server revents: %s", str); */
+            free(str);
+        }
         if (distenv->pfds[0].revents & POLLIN) {
             accept_node(distenv);
             nfds = refresh_pollfds(distenv);

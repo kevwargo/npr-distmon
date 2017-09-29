@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "message.h"
 #include "distenv.h"
 #include "dllist.h"
@@ -47,6 +48,10 @@ struct distenv *distenv_init(char *bind_param, char *conn_param)
         }
         DEBUG_PRINTF("Connected to %s", conn_param);
     }
+
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    srand(ts.tv_nsec);
 
     distenv->msg_buffer = (struct msg_buffer *)malloc(sizeof(struct msg_buffer));
     distenv->msg_buffer->queue = dllist_create();

@@ -14,6 +14,7 @@ struct message;
 typedef int (*message_callback_t)(struct distenv *distenv, struct message *message, void *data);
 
 struct __attribute__((packed)) message_header {
+    int id;
     int type;
     int len;
     unsigned char data[0];
@@ -21,9 +22,11 @@ struct __attribute__((packed)) message_header {
 
 struct message {
     struct node *sender;
+    int id;
     int type;
     int len;
     int received;
+    int stop_propagation;
     unsigned char data[0];
 };
 
@@ -42,7 +45,7 @@ struct message_handler {
 extern int handle_message(struct distenv *distenv, struct node *node);
 extern size_t send_message(struct node *node, int type, int len, void *buf);
 extern void register_handler(struct distenv *distenv, message_callback_t handler, void *data);
-extern void unregister_handler(struct distenv *distenv, message_callback_t handler, int free_data);
+extern void unregister_handler(struct distenv *distenv, message_callback_t handler, void *data, int free_data);
 extern struct message *wait_for_message(struct distenv *distenv, message_callback_t matcher, void *data);
 
 

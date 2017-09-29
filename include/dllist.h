@@ -13,8 +13,10 @@ struct dllist {
     int size;
 };
 
-#define dllist_add(list, item) \
-    __dllist_add(list, item, sizeof(*(item)))
+#define dllist_append(list, item) \
+    dllist_new(list, item, sizeof(*(item)), 0)
+#define dllist_prepend(list, item) \
+    dllist_new(list, item, sizeof(*(item)), 1)
 #define dllist_entry(item) \
     (struct dll_entry *)((char *)item - sizeof(struct dll_entry))
 
@@ -22,8 +24,9 @@ struct dllist {
     for (struct dll_entry *_dle = (list)->head; _dle && (var = (typeof(var))_dle->item); _dle = _dle->next)
 
 extern struct dllist *dllist_create();
-extern void *__dllist_add(struct dllist *list, void *item, size_t size);
-extern void dllist_delete(struct dllist *list, void *item);
+extern void *dllist_new(struct dllist *list, void *item, size_t size, int prepend);
+extern void dllist_remove(struct dllist *list, void *item);
 extern void dllist_clear(struct dllist *list);
+extern void dllist_destroy(struct dllist *list);
 
 #endif
